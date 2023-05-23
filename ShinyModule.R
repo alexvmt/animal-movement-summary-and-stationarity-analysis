@@ -1,11 +1,14 @@
+####################
+# Setup
+####################
+
+# load packages
 library(leaflet)
 library(leaflet.extras)
 library(move)
 library(sp)
 library(pals)
 library(mapview)
-
-library(readr)
 library(geosphere)
 library(ggplot2)
 library(magrittr)
@@ -15,43 +18,54 @@ library(plotly)
 
 
 
+####################
+# User interface
+####################
+
 shinyModuleUserInterface <- function(id, label) {
   ns <- NS(id)
   tagList(
     titlePanel("Inspect Stationarity"),
-    tags$style(type = 'text/css', ".col-sm-9 {padding: 15px;}"),  #prevent graphs from overlapping
+    tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
-	column(3,
-             selectInput(ns("dropdown_indi"), "Individium:",
-                  choices = c("Choice 1", "Choice 2", "Choice 3")),
-	     selectInput(ns("dropdown_date"), "Date range:",
-                 choices = list("last day" = 1, "last week" = 7, "last month" = 30, "last 6 months" = 180, "last year" = 365, "all time" = 99999), selected = c("last year" = 365))
-            #      # TODO: decide if we add this. default should be daily.
-            #      choices = c("daily", "hourly"), selected = "daily"),
-	    # TODO: remove outlier: unprobable distances > 100km/h per day
-	    # checkbox   
-	),
-	column(9,
-        #plotOutput(ns("timeseries_plot"))
-        #plotlyOutput(ns("ts_plot"))
-		DT::dataTableOutput(ns("table"))
-	)
-    ),
+      column(3,
+             selectInput(ns("dropdown_indi"),
+                         "Individium:",
+                         choices = c("Choice 1", "Choice 2", "Choice 3")),
+             selectInput(ns("dropdown_date"),
+                         "Date range:",
+                         choices = list("last day" = 1,
+                                        "last week" = 7,
+                                        "last month" = 30,
+                                        "last 6 months" = 180,
+                                        "last year" = 365,
+                                        "all time" = 99999),
+                         selected = c("last year" = 365))
+             # TODO: decide if we add this; default should be daily
+                        # choices = c("daily", "hourly"), selected = "daily"),
+             # TODO: remove outliers; unprobable distances > 100km/h per day; add checkbox
+             ),
+      column(9,
+             # plotOutput(ns("timeseries_plot"))
+             # plotlyOutput(ns("ts_plot"))
+             DT::dataTableOutput(ns("table"))
+             )
+      ),
     fluidRow(
-        column(3,
-	       # empty for now
-	       helpText("This app helps to find stationarity. First a general overview of all data should help to spot individials, which are of potential interest. The statistic table should help to filter for those.")
-        ),
-        column(5,
-                leafletOutput(ns("mymap"))
-        ),
-        column(4,
-                    #DT::dataTableOutput(ns("table"))
-            plotlyOutput(ns("ts_plot"))
-        )
+      column(3,
+             # empty for now
+             helpText("This app helps to find stationarity. First a general overview of all data should help to spot individials, which are of potential interest. The statistic table should help to filter for those.")
+             ),
+      column(5,
+             leafletOutput(ns("mymap"))
+             ),
+      column(4,
+             # DT::dataTableOutput(ns("table"))
+             plotlyOutput(ns("ts_plot"))
+             )
+      )
     )
-  )
-}
+  }
 
 shinyModule <- function(input, output, session, data) {
 
@@ -182,9 +196,9 @@ rctv_agg_data <- reactive({
 })
 
 
-########################
-# Time serie plot
-########################
+####################
+# Timeseries
+####################
 
 ## plot all time series
 #output$timeseries_plot <- renderPlot({	
@@ -233,9 +247,9 @@ output$ts_plot <- renderPlotly({
 
 
 
-######################
-# Map plot
-######################
+####################
+# Map
+####################
 
 
 # TODO: consider using https://movevis.org/ to create an interactive map
@@ -294,9 +308,9 @@ output$mymap <- renderLeaflet({
 
 
 
-########################
-# Statistics table
-########################
+####################
+# Movement summary
+####################
 
 rctv_summary <- reactive({
 
