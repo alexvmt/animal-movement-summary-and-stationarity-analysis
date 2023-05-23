@@ -248,60 +248,60 @@ shinyModule <- function(input, output, session, data) {
 # Map
 ####################
 
-
-# TODO: consider using https://movevis.org/ to create an interactive map
-#### make map as reactive object to be able to save it ####
-mapFinal <- reactive({
+  # TODO: consider using https://movevis.org/ to create an interactive map
+  
+  #### make map as reactive object to be able to save it ####
+  mapFinal <- reactive({
+    
     mv <- mvObj()
-
+    
     # store individual colors and names
-    cols       <- rainbow(length(namesIndiv(mv))) 
+    cols <- rainbow(length(namesIndiv(mv)))
     data_spl <- move::split(mv)
     indi_names_org <- namesIndiv(mv)
-
+    
     # convert to data frame to filter
     mvdf <- as.data.frame(mv)
-
+    
     # filter for date range and individuals
     if(input$dropdown_indi == "all"){
-	# do nothing
-    }else{
-	mvdf <- mvdf[mvdf$individual.local.identifier==input$dropdown_indi,]
+      # do nothing
+    } else {
+      mvdf <- mvdf[mvdf$individual.local.identifier==input$dropdown_indi,]
     }
     
     # convert back to move for plotting
     mv <- move(mvdf)
-
+    
     # get remaining individuals
     indi_names <- namesIndiv(mv)
     selected_id <- which(indi_names_org %in% indi_names)
-
+    
     # create map with lines for each animal, check if only one element is in the selected set
-    map <- leaflet() %>%  addTiles() 
-
-    if(length(indi_names)>1){
-	for (i in seq(along=indi_names)){
- 	   map <- map %>%
-	     addPolylines(data = coordinates(data_spl[[i]]), color = cols[i], opacity=0.6,  group = indi_names[i], weight=2) %>%
-	     addCircles(data = data_spl[[i]], fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
- 	}
-    }else{
-	 map <- map %>%
-             addPolylines(data = coordinates(mv), color = cols[selected_id], opacity=0.6,  group = indi_names_org[selected_id], weight=2) %>%
-             addCircles(data = mv, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
-
+    map <- leaflet() %>% 
+      addTiles() 
+    
+    if(length(indi_names) > 1) {
+      for (i in seq(along = indi_names)) {
+        map <- map %>% 
+          addPolylines(data = coordinates(data_spl[[i]]), color = cols[i], opacity = 0.6,  group = indi_names[i], weight = 2) %>% 
+          addCircles(data = data_spl[[i]], fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
+      }
+    } else {
+      map <- map %>% 
+        addPolylines(data = coordinates(mv), color = cols[selected_id], opacity = 0.6,  group = indi_names_org[selected_id], weight = 2) %>% 
+        addCircles(data = mv, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
     }
-
-
-    map  <- map %>%  addLegend(position= "topright", colors=cols[selected_id], labels=indi_names_org[selected_id] ,opacity = 0.6)  
+    
+    map  <- map %>% 
+      addLegend(position = "topright", colors = cols[selected_id], labels = indi_names_org[selected_id], opacity = 0.6)
+    
     map
-
-})
-
-### render map to be able to see it ####
-output$mymap <- renderLeaflet({
-    mapFinal()
-})
+    
+  })
+  
+  ### render map to be able to see it ####
+  output$mymap <- renderLeaflet({ mapFinal() })
 
 
 
