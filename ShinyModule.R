@@ -92,47 +92,44 @@ shinyModule <- function(input, output, session, data) {
   # data depends on user input
   rctv_processed_data <- reactive({
     
-    # get dimensions and unique ids
-    data_tmp <- as.data.frame(data)
+    # transform move object to dataframe
+    data_df <- as.data.frame(data)
     
-    # rename columns
-    id_col <- "individual.local.identifier"  #"individual.id"       #"individual.local.identifier"   
-    timestamp_col <- "timestamp"
-    lon_col <- "location.long"
-    lat_col <- "location.lat"
-    names(data_tmp)[names(data_tmp) == id_col] <- "id"
-    names(data_tmp)[names(data_tmp) == timestamp_col] <- "timestamp"
-    names(data_tmp)[names(data_tmp) == lon_col] <- "lon"
-    names(data_tmp)[names(data_tmp) == lat_col] <- "lat"
+    # cast tag.local.identifier to character
+    data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
     
     # get individuals
-    individuals <- unique(data_tmp$id)
+    individuals <- unique(data_df$tag.local.identifier)
     
     # create year and date columns
-    data_tmp$date <- as.Date(format(data_tmp$timestamp, format = "%Y-%m-%d"))
-    data_tmp$year <- as.integer(format(data_tmp$timestamp, format = "%Y"))
+    data_df$date <- as.Date(format(data_df$timestamps, format = "%Y-%m-%d"))
+    data_df$year <- as.integer(format(data_df$timestamps, format = "%Y"))
     
     # create empty dataframe to store processed individual data
-    processed_data <- data.frame(matrix(ncol = length(colnames(data_tmp)[-length(colnames(data_tmp))]), nrow = 0))
-    colnames(processed_data) <- colnames(data_tmp)[-length(colnames(data_tmp))]
+    processed_data <- data.frame(matrix(ncol = 5, nrow = 0))
+    processed_data_columns <- c("tag.local.identifier", "timestamps", "location.long", "location.lat", "date")
+    colnames(processed_data) <- processed_data_columns
     
     # select time window
     last_n_days <- as.numeric(input$dropdown_date)
     
+    # process last n days of observations per individual
     for(individual in individuals) {
       
       # filter data based on individual
-      individual_data <- data_tmp[data_tmp$id == individual, ]
+      individual_data <- data_df[data_df$tag.local.identifier == individual, ]
       
-      # TODO: commented for now since object contains all columns and therefore more NAs
-      #       maybe interpolate with 0s and mark in an additional row that this data was missing
+      # subset data to relevant columns
+      individual_data <- individual_data[ , processed_data_columns]
+      
+      # TODO: maybe interpolate with 0s and mark in an additional row that this data was missing;
       #       could be show in a different color in the visualization then
-      # drop rows with missing values
       
-      #individual_data <- na.omit(individual_data)
+      # drop rows with missing values
+      individual_data <- na.omit(individual_data)
       
       # drop duplicated rows
-      individual_data <- individual_data[!duplicated(individual_data[c("id", "timestamp")]), ]
+      individual_data <- individual_data[!duplicated(individual_data[c("tag.local.identifier", "timestamps")]), ]
       
       # extract max and min date
       max_date <- max(individual_data$date)
@@ -147,26 +144,26 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # order data
-    processed_data <- processed_data[order(processed_data$id, processed_data$timestamp), ]
+    processed_data <- processed_data[order(processed_data$tag.local.identifier, processed_data$timestamps), ]
     
     # create lag columns
-    processed_data$id_lag <- c(NA, head(processed_data$id, -1))
-    processed_data$lon_lag <- c(NA, head(processed_data$lon, -1))
-    processed_data$lat_lag <- c(NA, head(processed_data$lat, -1))
+    processed_data$tag.local.identifier.lag <- c(NA, head(processed_data$tag.local.identifier, -1))
+    processed_data$location.long.lag <- c(NA, head(processed_data$location.long, -1))
+    processed_data$location.lat.lag <- c(NA, head(processed_data$location.lat, -1))
     
-    processed_data$id_lag <- ifelse(processed_data$id == processed_data$id_lag,
-                                    processed_data$id_lag,
-                                    NA)
+    processed_data$tag.local.identifier.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
+                                                      processed_data$tag.local.identifier.lag,
+                                                      NA)
     
-    processed_data$lon_lag <- ifelse(processed_data$id == processed_data$id_lag,
-                                     processed_data$lon_lag,
-                                     NA)
+    processed_data$location.long.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
+                                               processed_data$location.long.lag,
+                                               NA)
     
-    processed_data$lat_lag <- ifelse(processed_data$id == processed_data$id_lag,
-                                     processed_data$lat_lag,
-                                     NA)
+    processed_data$location.lat.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
+                                              processed_data$location.lat.lag,
+                                              NA)
     
-    # calculate distance between two measurements
+    # calculate distance between two location measurements
     calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
       
       if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
@@ -175,10 +172,10 @@ shinyModule <- function(input, output, session, data) {
       
     }
     
-    processed_data$distance_meters <- mapply(lon_a = processed_data$lon,
-                                             lat_a = processed_data$lat,
-                                             lon_b = processed_data$lon_lag,
-                                             lat_b = processed_data$lat_lag,
+    processed_data$distance_meters <- mapply(lon_a = processed_data$location.long,
+                                             lat_a = processed_data$location.lat,
+                                             lon_b = processed_data$location.long.lag,
+                                             lat_b = processed_data$location.lat.lag,
                                              FUN = calculate_distance_in_meters_between_coordinates)
     
     rctv_processed_data <- processed_data
@@ -189,9 +186,9 @@ shinyModule <- function(input, output, session, data) {
   rctv_agg_data <- reactive({
     
     # aggregate distances by time interval and individual
-    data_agg_id_date <- aggregate(distance_meters ~ date + id, data = rctv_processed_data(), FUN = sum)
+    data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
     
-    data_agg_id_date
+    data_aggregated
     
   })
   
@@ -216,13 +213,13 @@ shinyModule <- function(input, output, session, data) {
     
     if(input$dropdown_indi == "all") {
       # TODO: define a function to plot all and not just the first given one
-      id <- data_agg_id_date$id[1]
+      id <- data_agg_id_date$tag.local.identifier[1]
     } else {
       id <- input$dropdown_indi
     }
     
     # plot time series for selected individual
-    data_to_plot <- data_agg_id_date[data_agg_id_date$id == id, ]
+    data_to_plot <- data_agg_id_date[data_agg_id_date$tag.local.identifier == id, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
     
@@ -232,11 +229,11 @@ shinyModule <- function(input, output, session, data) {
       scale <- "1 day"
     }
     
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = 'scatter', mode = 'lines', name = id) %>% 
+    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = id) %>% 
       # add_trace(y = ~Series2, name = 'Series 2', mode = 'lines') %>% 
       # add_trace(y = ~Series3, name = 'Series 3', mode = 'lines') %>% 
       # layout(title = paste0("Distance per individual ", id, " between ", start_date, " and ", end_date), showlegend = TRUE)
-      layout(showlegend=TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
+      layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
     
