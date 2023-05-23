@@ -241,13 +241,11 @@ shinyModule <- function(input, output, session, data) {
     p
     
   })
-
-
-
-####################
-# Map
-####################
-
+  
+  
+  
+  ##### Map
+  
   # TODO: consider using https://movevis.org/ to create an interactive map
   
   #### make map as reactive object to be able to save it ####
@@ -302,70 +300,65 @@ shinyModule <- function(input, output, session, data) {
   
   ### render map to be able to see it ####
   output$mymap <- renderLeaflet({ mapFinal() })
-
-
-
-####################
-# Movement summary
-####################
-
-rctv_summary <- reactive({
-
+  
+  
+  
+  ##### Movement summary
+  
+  rctv_summary <- reactive({
+    
     data_agg_id_date <- rctv_agg_data()
-
+    
     # get individuals
     individuals <- unique(data_agg_id_date$id)
-
+    
     # TODO: add column for n days with almost no movement/2x below stdev
     # TODO: missing data today / in time series?
     # TODO: less movement than expected => below_today, to be discussed
+    
     # create empty dataframe to store summary data
     colnames_summary <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance", "avg. distance")
     summary <- data.frame(matrix(ncol = length(colnames_summary), nrow = 0))
     colnames(summary) <- colnames_summary
-
+    
     # compute summary statistics for last n days per individual
     for(individual in individuals) {
-
-        # filter data based on individual
-        individual_agg_data <- data_agg_id_date[data_agg_id_date$id == individual, ]
-
-        # calculate missing days / account for all set to 99999
-        missing_days <- as.numeric(input$dropdown_date) - dim(individual_agg_data)[1]
-        missing_days <- ifelse(missing_days < 0, 0, missing_days)
-
-        # calculate below average of today
-        avg_distance <- mean(individual_agg_data$distance_meters)
-        sd_distance  <- sd(individual_agg_data$distance_meters)
-        max_date     <- max(individual_agg_data$date)
-        meters_today <- individual_agg_data[individual_agg_data$date== max_date, "distance_meters"] 
-        below_today  <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
-
-        # store values
-        individual_summary_data <- c(unique(individual_agg_data$id),
-                        dim(individual_agg_data)[1],
-                        missing_days,
-                        below_today,
-                        round(sum(individual_agg_data$distance_meters), 2),
-                        round(avg_distance, 2)
-                        )
-
-        # append summary data to existing dataframe
-        summary[nrow(summary)+1, ] <- individual_summary_data
-
+      
+      # filter data based on individual
+      individual_agg_data <- data_agg_id_date[data_agg_id_date$id == individual, ]
+      
+      # calculate missing days / account for all set to 99999
+      missing_days <- as.numeric(input$dropdown_date) - dim(individual_agg_data)[1]
+      missing_days <- ifelse(missing_days < 0, 0, missing_days)
+      
+      # calculate below average of today
+      avg_distance <- mean(individual_agg_data$distance_meters)
+      sd_distance <- sd(individual_agg_data$distance_meters)
+      max_date <- max(individual_agg_data$date)
+      meters_today <- individual_agg_data[individual_agg_data$date == max_date, "distance_meters"] 
+      below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
+      
+      # store values
+      individual_summary_data <- c(unique(individual_agg_data$id),
+                                   dim(individual_agg_data)[1],
+                                   missing_days,
+                                   below_today,
+                                   round(sum(individual_agg_data$distance_meters), 2),
+                                   round(avg_distance, 2)
+                                   )
+      
+      # append summary data to existing dataframe
+      summary[nrow(summary) + 1, ] <- individual_summary_data
+      
     }
     
-
     summary
-
-})
-
-
-  # plot a table
-  output$table <- DT::renderDataTable({
-    # render table
-    datatable(rctv_summary())
+    
   })
-
+  
+  # plot a table
+  output$table <- DT::renderDataTable({ datatable(rctv_summary()) })
+  
   return(mvObj)
+  
 }
