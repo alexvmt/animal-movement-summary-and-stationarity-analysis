@@ -65,32 +65,35 @@ shinyModuleUserInterface <- function(id, label) {
              )
       )
     )
-  }
+}
+
+
+
+####################
+# Server
+####################
 
 shinyModule <- function(input, output, session, data) {
 
-#### interactive object to read in .RData file  ####
-mvObj <- reactive({ data })
-
-
-observe({
-    # Wait until the data is loaded
+  #### interactive object to read in .RData file  ####
+  mvObj <- reactive({ data })
+  
+  observe({
+    # wait until the data is loaded
     if (is.null(data)) return()
     # TODO: find a better/more stable way than gsub for removing the X
     # Update the dropdown with the unique values from the 'id' column of the loaded data
     keys <- c(namesIndiv(data), "all")
-    values <- c(idData(data)$individual.local.identifier, "all") 
-    key_value_list <- setNames(values,keys)	    
+    values <- c(idData(data)$individual.local.identifier, "all")
+    key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_indi", choices = key_value_list, selected = c("all" = "all")) 
-})
-
-
-# data depends on user input
-rctv_processed_data <- reactive({
-
+  })
+  
+  # data depends on user input
+  rctv_processed_data <- reactive({
+    
     # get dimensions and unique ids
     data_tmp <- as.data.frame(data)
-
     
     # rename columns
     id_col <- "individual.local.identifier"  #"individual.id"       #"individual.local.identifier"   
@@ -101,99 +104,97 @@ rctv_processed_data <- reactive({
     names(data_tmp)[names(data_tmp) == timestamp_col] <- "timestamp"
     names(data_tmp)[names(data_tmp) == lon_col] <- "lon"
     names(data_tmp)[names(data_tmp) == lat_col] <- "lat"
-
-
+    
     # get individuals
     individuals <- unique(data_tmp$id)
-
-
+    
     # create year and date columns
     data_tmp$date <- as.Date(format(data_tmp$timestamp, format = "%Y-%m-%d"))
     data_tmp$year <- as.integer(format(data_tmp$timestamp, format = "%Y"))
-
+    
     # create empty dataframe to store processed individual data
     processed_data <- data.frame(matrix(ncol = length(colnames(data_tmp)[-length(colnames(data_tmp))]), nrow = 0))
     colnames(processed_data) <- colnames(data_tmp)[-length(colnames(data_tmp))]
-
-
+    
     # select time window
     last_n_days <- as.numeric(input$dropdown_date)
-
-
+    
     for(individual in individuals) {
-        # filter data based on individual
-        individual_data <- data_tmp[data_tmp$id == individual, ]
-
-        # TODO: commented for now since object contains all columns and therefore more NAs
-        #       maybe interpolate with 0s and mark in an additional row that this data was missing
-        #       could be show in a different color in the visualization then
-        # drop rows with missing values
-        #individual_data <- na.omit(individual_data)
-
-        # drop duplicated rows
-        individual_data <- individual_data[!duplicated(individual_data[c("id", "timestamp")]), ]
-
-        # extract max and min date
-        max_date <- max(individual_data$date)
-        min_date <- max_date - last_n_days
-
-        # filter data based on date range
-        individual_data <- individual_data[(individual_data$date >= min_date) & (individual_data$date <= max_date), ]
-
-        # append processed data to existing dataframe
-        processed_data <- rbind(processed_data, individual_data)
+      
+      # filter data based on individual
+      individual_data <- data_tmp[data_tmp$id == individual, ]
+      
+      # TODO: commented for now since object contains all columns and therefore more NAs
+      #       maybe interpolate with 0s and mark in an additional row that this data was missing
+      #       could be show in a different color in the visualization then
+      # drop rows with missing values
+      
+      #individual_data <- na.omit(individual_data)
+      
+      # drop duplicated rows
+      individual_data <- individual_data[!duplicated(individual_data[c("id", "timestamp")]), ]
+      
+      # extract max and min date
+      max_date <- max(individual_data$date)
+      min_date <- max_date - last_n_days
+      
+      # filter data based on date range
+      individual_data <- individual_data[(individual_data$date >= min_date) & (individual_data$date <= max_date), ]
+      
+      # append processed data to existing dataframe
+      processed_data <- rbind(processed_data, individual_data)
+      
     }
-
-
+    
     # order data
     processed_data <- processed_data[order(processed_data$id, processed_data$timestamp), ]
-
+    
     # create lag columns
     processed_data$id_lag <- c(NA, head(processed_data$id, -1))
     processed_data$lon_lag <- c(NA, head(processed_data$lon, -1))
     processed_data$lat_lag <- c(NA, head(processed_data$lat, -1))
-
+    
     processed_data$id_lag <- ifelse(processed_data$id == processed_data$id_lag,
                                     processed_data$id_lag,
                                     NA)
-
+    
     processed_data$lon_lag <- ifelse(processed_data$id == processed_data$id_lag,
-                                    processed_data$lon_lag,
-                                    NA)
-
+                                     processed_data$lon_lag,
+                                     NA)
+    
     processed_data$lat_lag <- ifelse(processed_data$id == processed_data$id_lag,
-                                    processed_data$lat_lag,
-                                    NA)
-
+                                     processed_data$lat_lag,
+                                     NA)
+    
     # calculate distance between two measurements
     calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
-        if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-        distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
+      
+      if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
+      
+      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
+      
     }
-
-
-
+    
     processed_data$distance_meters <- mapply(lon_a = processed_data$lon,
-                                            lat_a = processed_data$lat,
-                                            lon_b = processed_data$lon_lag,
-                                            lat_b = processed_data$lat_lag,
-                                            FUN = calculate_distance_in_meters_between_coordinates)
-
-
+                                             lat_a = processed_data$lat,
+                                             lon_b = processed_data$lon_lag,
+                                             lat_b = processed_data$lat_lag,
+                                             FUN = calculate_distance_in_meters_between_coordinates)
+    
     rctv_processed_data <- processed_data
     rctv_processed_data
-
-}) # end of reactive data processing
-
-
-rctv_agg_data <- reactive({
-
-            # aggregate distances by time interval and individual
-            data_agg_id_date <- aggregate(distance_meters ~ date + id, data = rctv_processed_data(), FUN = sum)
-
+    
+    }) # end of reactive data processing
+  
+  rctv_agg_data <- reactive({
+    
+    # aggregate distances by time interval and individual
+    data_agg_id_date <- aggregate(distance_meters ~ date + id, data = rctv_processed_data(), FUN = sum)
+    
     data_agg_id_date
+    
+  })
 
-})
 
 
 ####################
