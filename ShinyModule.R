@@ -46,7 +46,7 @@ shinyModuleUserInterface <- function(id, label) {
              # TODO: remove outliers; unprobable distances > 100km/h per day; add checkbox
              ),
       column(9,
-             # plotOutput(ns("timeseries_plot"))
+             # plotOutput(ns("time_series_plot"))
              # plotlyOutput(ns("ts_plot"))
              DT::dataTableOutput(ns("table"))
              )
@@ -194,57 +194,53 @@ shinyModule <- function(input, output, session, data) {
     data_agg_id_date
     
   })
-
-
-
-####################
-# Timeseries
-####################
-
-## plot all time series
-#output$timeseries_plot <- renderPlot({	
-#  ggplot(data_to_plot, aes(x = date, y = distance_meters, group = 1)) +
-#  geom_line(linewidth = 0.75) +
-#  scale_x_date(breaks = seq(start_date, end_date, by = scale)) +
-#  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
-#  ggtitle(paste0("Distance in meters moved per day for individual ", id, " between ", start_date, " and ", end_date))
-#})
-
-
-# Render the Plotly plot
-output$ts_plot <- renderPlotly({
-
+  
+  
+  
+  ##### Time series
+  
+  # plot entire time series
+  # output$time_series_plot <- renderPlot({
+  #   ggplot(data_to_plot, aes(x = date, y = distance_meters, group = 1)) +
+  #     geom_line(linewidth = 0.75) +
+  #     scale_x_date(breaks = seq(start_date, end_date, by = scale)) +
+  #     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  #     ggtitle(paste0("Distance in meters moved per day for individual ", id, " between ", start_date, " and ", end_date))
+  # })
+  
+  # render plotly plot
+  output$ts_plot <- renderPlotly({
+    
     # load reactive data
     data_agg_id_date <- rctv_agg_data()
-
-    if(input$dropdown_indi=="all"){
-        # TODO: define a function to plot all and not just the first given one
-        id <- data_agg_id_date$id[1]
-    }else{
-        id <- input$dropdown_indi
+    
+    if(input$dropdown_indi == "all") {
+      # TODO: define a function to plot all and not just the first given one
+      id <- data_agg_id_date$id[1]
+    } else {
+      id <- input$dropdown_indi
     }
-
-
-    # plot timeseries for selected individual
+    
+    # plot time series for selected individual
     data_to_plot <- data_agg_id_date[data_agg_id_date$id == id, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
-
+    
     if (dim(data_to_plot)[1] > 30) {
-    scale <- "1 week"
+      scale <- "1 week"
     } else {
-    scale <- "1 day"
+      scale <- "1 day"
     }
-
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = 'scatter', mode = 'lines', name = id) %>%
-#            add_trace(y = ~Series2, name = 'Series 2', mode = 'lines') %>%
-#            add_trace(y = ~Series3, name = 'Series 3', mode = 'lines') %>%
-            #layout(title = paste0("Distance per individual ", id, " between ", start_date, " and ", end_date), showlegend=TRUE)
-            layout(showlegend=TRUE, legend = list(orientation = "h", xanchor = "center", x=0.5, y=1) )
-
-    p # Return the plot
-})
-
+    
+    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = 'scatter', mode = 'lines', name = id) %>% 
+      # add_trace(y = ~Series2, name = 'Series 2', mode = 'lines') %>% 
+      # add_trace(y = ~Series3, name = 'Series 3', mode = 'lines') %>% 
+      # layout(title = paste0("Distance per individual ", id, " between ", start_date, " and ", end_date), showlegend = TRUE)
+      layout(showlegend=TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
+    
+    p
+    
+  })
 
 
 
