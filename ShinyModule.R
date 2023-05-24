@@ -1,5 +1,5 @@
 ####################
-# Setup
+# setup
 ####################
 
 # load packages
@@ -19,20 +19,20 @@ library(plotly)
 
 
 ####################
-# User interface
+# user interface
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
   ns <- NS(id)
   tagList(
-    titlePanel("Inspect Stationarity"),
+    titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
       column(3,
-             selectInput(ns("dropdown_indi"),
-                         "Individium:",
+             selectInput(ns("dropdown_individual"),
+                         "Individual:",
                          choices = c("Choice 1", "Choice 2", "Choice 3")),
-             selectInput(ns("dropdown_date"),
+             selectInput(ns("dropdown_date_range"),
                          "Date range:",
                          choices = list("last day" = 1,
                                         "last week" = 7,
@@ -41,27 +41,22 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last year" = 365,
                                         "all time" = 99999),
                          selected = c("last year" = 365))
-             # TODO: decide if we add this; default should be daily
-                        # choices = c("daily", "hourly"), selected = "daily"),
-             # TODO: remove outliers; unprobable distances > 100km/h per day; add checkbox
              ),
       column(9,
-             # plotOutput(ns("time_series_plot"))
-             # plotlyOutput(ns("ts_plot"))
-             DT::dataTableOutput(ns("table"))
+             DT::dataTableOutput(ns("movement_summary"))
              )
       ),
     fluidRow(
       column(3,
-             # empty for now
-             helpText("This app helps to find stationarity. First a general overview of all data should help to spot individials, which are of potential interest. The statistic table should help to filter for those.")
+             helpText("This app summarizes animal movement data and helps to find stationary tags.
+                      First, a general overview of all data should help to spot individuals which are of potential interest.
+                      The movement summary table should help to filter for those.")
              ),
       column(5,
-             leafletOutput(ns("mymap"))
+             leafletOutput(ns("map"))
              ),
       column(4,
-             # DT::dataTableOutput(ns("table"))
-             plotlyOutput(ns("ts_plot"))
+             plotlyOutput(ns("time_series"))
              )
       )
     )
@@ -70,27 +65,28 @@ shinyModuleUserInterface <- function(id, label) {
 
 
 ####################
-# Server
+# server
 ####################
 
 shinyModule <- function(input, output, session, data) {
 
-  #### interactive object to read in .RData file  ####
-  mvObj <- reactive({ data })
+  # make loaded data reactive
+  rctv_data <- reactive({ data })
   
+  # generate inputs for dropdown
   observe({
     # wait until the data is loaded
     if (is.null(data)) return()
-    # TODO: find a better/more stable way than gsub for removing the X
-    # Update the dropdown with the unique values from the 'id' column of the loaded data
     data_df <- as.data.frame(data)
     keys <- c(data_df$tag.local.identifier, "all")
     values <- c(data_df$tag.local.identifier, "all")
     key_value_list <- setNames(values, keys)
-    updateSelectInput(session, "dropdown_indi", choices = key_value_list, selected = c("all" = "all")) 
+    updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
   })
   
-  # data depends on user input
+  
+  
+  ##### process loaded data
   rctv_processed_data <- reactive({
     
     # transform move object to dataframe
@@ -121,7 +117,7 @@ shinyModule <- function(input, output, session, data) {
     colnames(processed_data) <- processed_data_columns
     
     # select time window
-    last_n_days <- as.numeric(input$dropdown_date)
+    last_n_days <- as.numeric(input$dropdown_date_range)
     
     # process last n days of observations per individual
     for(individual in individuals) {
@@ -131,9 +127,6 @@ shinyModule <- function(input, output, session, data) {
       
       # subset data to relevant columns
       individual_data <- individual_data[ , processed_data_columns]
-      
-      # TODO: maybe interpolate with 0s and mark in an additional row that this data was missing;
-      #       could be show in a different color in the visualization then
       
       # drop rows with missing values
       individual_data <- na.omit(individual_data)
@@ -191,57 +184,49 @@ shinyModule <- function(input, output, session, data) {
     rctv_processed_data <- processed_data
     rctv_processed_data
     
-    }) # end of reactive data processing
+    })
   
-  rctv_agg_data <- reactive({
+  
+  
+  ##### aggregate processed data
+  rctv_data_aggregated <- reactive({
     
     # aggregate distances by time interval and individual
     data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
+    
     data_aggregated
     
   })
   
   
   
-  ##### Time series
-  
-  # plot entire time series
-  # output$time_series_plot <- renderPlot({
-  #   ggplot(data_to_plot, aes(x = date, y = distance_meters, group = 1)) +
-  #     geom_line(linewidth = 0.75) +
-  #     scale_x_date(breaks = seq(start_date, end_date, by = scale)) +
-  #     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
-  #     ggtitle(paste0("Distance in meters moved per day for individual ", id, " between ", start_date, " and ", end_date))
-  # })
-  
-  # render plotly plot
-  output$ts_plot <- renderPlotly({
+  ##### time series
+  output$time_series <- renderPlotly({
     
     # load reactive data
-    data_aggregated <- rctv_agg_data()
+    data_aggregated <- rctv_data_aggregated()
     
-    if(input$dropdown_indi == "all") {
-      # TODO: define a function to plot all and not just the first given one
-      id <- data_aggregated$tag.local.identifier[1]
+    # select individual to plot data for
+    if(input$dropdown_individual == "all") {
+      individual <- data_aggregated$tag.local.identifier[1]
     } else {
-      id <- input$dropdown_indi
+      individual <- input$dropdown_individual
     }
     
-    # plot time series for selected individual
-    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == id, ]
+    # get data to be plotted
+    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
     
-    if (dim(data_to_plot)[1] > 30) {
+    # set date scale
+    if (dim(data_to_plot)[1] > 31) {
       scale <- "1 week"
     } else {
       scale <- "1 day"
     }
     
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = id) %>% 
-      # add_trace(y = ~Series2, name = 'Series 2', mode = 'lines') %>% 
-      # add_trace(y = ~Series3, name = 'Series 3', mode = 'lines') %>% 
-      # layout(title = paste0("Distance per individual ", id, " between ", start_date, " and ", end_date), showlegend = TRUE)
+    # plot time series for selected individual
+    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
       layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
@@ -250,14 +235,11 @@ shinyModule <- function(input, output, session, data) {
   
   
   
-  ##### Map
-  
-  # TODO: consider using https://movevis.org/ to create an interactive map
-  
+  ##### map
   #### make map as reactive object to be able to save it ####
   mapFinal <- reactive({
     
-    mv <- mvObj()
+    mv <- rctv_data()
     
     # store individual colors and names
     cols <- rainbow(length(namesIndiv(mv)))
@@ -268,10 +250,10 @@ shinyModule <- function(input, output, session, data) {
     mvdf <- as.data.frame(mv)
     
     # filter for date range and individuals
-    if(input$dropdown_indi == "all"){
+    if(input$dropdown_individual == "all"){
       # do nothing
     } else {
-      mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_indi, ]
+      mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_individual, ]
     }
     
     # convert back to move for plotting
@@ -305,22 +287,18 @@ shinyModule <- function(input, output, session, data) {
   })
   
   ### render map to be able to see it ####
-  output$mymap <- renderLeaflet({ mapFinal() })
+  output$map <- renderLeaflet({ mapFinal() })
   
   
   
-  ##### Movement summary
-  
-  rctv_summary <- reactive({
+  ##### movement summary
+  rctv_movement_summary <- reactive({
     
-    data_aggregated <- rctv_agg_data()
+    # load reactive data
+    data_aggregated <- rctv_data_aggregated()
     
     # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
-    
-    # TODO: add column for n days with almost no movement/2x below stdev
-    # TODO: missing data today / in time series?
-    # TODO: less movement than expected => below_today, to be discussed
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance", "avg. distance")
@@ -334,7 +312,7 @@ shinyModule <- function(input, output, session, data) {
       individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
       # calculate missing days (account for all set to 99999)
-      missing_days <- as.numeric(input$dropdown_date) - dim(individual_data_aggregated)[1]
+      missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
       # calculate today below average
@@ -345,26 +323,25 @@ shinyModule <- function(input, output, session, data) {
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
       
       # store values
-      individual_movement_summary_data <- c(individual,
-                                            dim(individual_agg_data)[1],
-                                            missing_days,
-                                            below_today,
-                                            round(sum(individual_data_aggregated$distance_meters), 2),
-                                            round(avg_distance, 2)
-                                            )
+      individual_movement_summary <- c(individual,
+                                       dim(individual_data_aggregated)[1],
+                                       missing_days,
+                                       below_today,
+                                       round(sum(individual_data_aggregated$distance_meters), 2),
+                                       round(avg_distance, 2)
+                                       )
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
     
-    summary
+    movement_summary
     
   })
   
-  # plot a table
-  output$table <- DT::renderDataTable({ DT::datatable(rctv_summary()) })
+  output$movement_summary <- DT::renderDataTable({ DT::datatable(rctv_movement_summary()) })
   
-  return(mvObj)
+  return(rctv_data)
   
 }
