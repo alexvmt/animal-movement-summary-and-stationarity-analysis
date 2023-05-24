@@ -218,17 +218,17 @@ shinyModule <- function(input, output, session, data) {
   output$ts_plot <- renderPlotly({
     
     # load reactive data
-    data_agg_id_date <- rctv_agg_data()
+    data_aggregated <- rctv_agg_data()
     
     if(input$dropdown_indi == "all") {
       # TODO: define a function to plot all and not just the first given one
-      id <- data_agg_id_date$tag.local.identifier[1]
+      id <- data_aggregated$tag.local.identifier[1]
     } else {
       id <- input$dropdown_indi
     }
     
     # plot time series for selected individual
-    data_to_plot <- data_agg_id_date[data_agg_id_date$tag.local.identifier == id, ]
+    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == id, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
     
