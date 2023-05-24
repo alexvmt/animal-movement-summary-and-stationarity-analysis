@@ -313,48 +313,48 @@ shinyModule <- function(input, output, session, data) {
   
   rctv_summary <- reactive({
     
-    data_agg_id_date <- rctv_agg_data()
+    data_aggregated <- rctv_agg_data()
     
     # get individuals
-    individuals <- unique(data_agg_id_date$tag.local.identifier)
+    individuals <- unique(data_aggregated$tag.local.identifier)
     
     # TODO: add column for n days with almost no movement/2x below stdev
     # TODO: missing data today / in time series?
     # TODO: less movement than expected => below_today, to be discussed
     
-    # create empty dataframe to store summary data
-    colnames_summary <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance", "avg. distance")
-    summary <- data.frame(matrix(ncol = length(colnames_summary), nrow = 0))
-    colnames(summary) <- colnames_summary
+    # create empty dataframe to store movement summary
+    movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance", "avg. distance")
+    movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
+    colnames(movement_summary) <- movement_summary_columns
     
-    # compute summary statistics for last n days per individual
+    # compute movement summary for last n days per individual
     for(individual in individuals) {
       
       # filter data based on individual
-      individual_agg_data <- data_agg_id_date[data_agg_id_date$tag.local.identifier == individual, ]
+      individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
-      # calculate missing days / account for all set to 99999
-      missing_days <- as.numeric(input$dropdown_date) - dim(individual_agg_data)[1]
+      # calculate missing days (account for all set to 99999)
+      missing_days <- as.numeric(input$dropdown_date) - dim(individual_data_aggregated)[1]
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
-      # calculate below average of today
-      avg_distance <- mean(individual_agg_data$distance_meters)
-      sd_distance <- sd(individual_agg_data$distance_meters)
-      max_date <- max(individual_agg_data$date)
-      meters_today <- individual_agg_data[individual_agg_data$date == max_date, "distance_meters"] 
+      # calculate today below average
+      avg_distance <- mean(individual_data_aggregated$distance_meters)
+      sd_distance <- sd(individual_data_aggregated$distance_meters)
+      max_date <- max(individual_data_aggregated$date)
+      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
       
       # store values
-      individual_summary_data <- c(unique(individual_agg_data$tag.local.identifier),
-                                   dim(individual_agg_data)[1],
-                                   missing_days,
-                                   below_today,
-                                   round(sum(individual_agg_data$distance_meters), 2),
-                                   round(avg_distance, 2)
-                                   )
+      individual_movement_summary_data <- c(individual,
+                                            dim(individual_agg_data)[1],
+                                            missing_days,
+                                            below_today,
+                                            round(sum(individual_data_aggregated$distance_meters), 2),
+                                            round(avg_distance, 2)
+                                            )
       
-      # append summary data to existing dataframe
-      summary[nrow(summary) + 1, ] <- individual_summary_data
+      # append individual movement summary to existing dataframe
+      movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
     
