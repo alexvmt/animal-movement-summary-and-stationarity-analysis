@@ -83,8 +83,9 @@ shinyModule <- function(input, output, session, data) {
     if (is.null(data)) return()
     # TODO: find a better/more stable way than gsub for removing the X
     # Update the dropdown with the unique values from the 'id' column of the loaded data
-    keys <- c(namesIndiv(data), "all")
-    values <- c(idData(data)$individual.local.identifier, "all")
+    data_df <- as.data.frame(data)
+    keys <- c(data_df$tag.local.identifier, "all")
+    values <- c(data_df$tag.local.identifier, "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_indi", choices = key_value_list, selected = c("all" = "all")) 
   })
@@ -187,7 +188,6 @@ shinyModule <- function(input, output, session, data) {
     
     # aggregate distances by time interval and individual
     data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
-    
     data_aggregated
     
   })
@@ -262,7 +262,7 @@ shinyModule <- function(input, output, session, data) {
     if(input$dropdown_indi == "all"){
       # do nothing
     } else {
-      mvdf <- mvdf[mvdf$individual.local.identifier==input$dropdown_indi,]
+      mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_indi, ]
     }
     
     # convert back to move for plotting
@@ -307,7 +307,7 @@ shinyModule <- function(input, output, session, data) {
     data_agg_id_date <- rctv_agg_data()
     
     # get individuals
-    individuals <- unique(data_agg_id_date$id)
+    individuals <- unique(data_agg_id_date$tag.local.identifier)
     
     # TODO: add column for n days with almost no movement/2x below stdev
     # TODO: missing data today / in time series?
@@ -322,7 +322,7 @@ shinyModule <- function(input, output, session, data) {
     for(individual in individuals) {
       
       # filter data based on individual
-      individual_agg_data <- data_agg_id_date[data_agg_id_date$id == individual, ]
+      individual_agg_data <- data_agg_id_date[data_agg_id_date$tag.local.identifier == individual, ]
       
       # calculate missing days / account for all set to 99999
       missing_days <- as.numeric(input$dropdown_date) - dim(individual_agg_data)[1]
@@ -336,7 +336,7 @@ shinyModule <- function(input, output, session, data) {
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
       
       # store values
-      individual_summary_data <- c(unique(individual_agg_data$id),
+      individual_summary_data <- c(unique(individual_agg_data$tag.local.identifier),
                                    dim(individual_agg_data)[1],
                                    missing_days,
                                    below_today,
@@ -354,7 +354,7 @@ shinyModule <- function(input, output, session, data) {
   })
   
   # plot a table
-  output$table <- DT::renderDataTable({ datatable(rctv_summary()) })
+  output$table <- DT::renderDataTable({ DT::datatable(rctv_summary()) })
   
   return(mvObj)
   
