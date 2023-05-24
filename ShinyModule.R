@@ -99,6 +99,15 @@ shinyModule <- function(input, output, session, data) {
     # cast tag.local.identifier to character
     data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
     
+    # make sure right coordinates are used
+    if ("coords.x1" %in% names(data_df)) {
+      data_df$location.lat <- data_df$coords.x1
+    }
+    
+    if ("coords.x2" %in% names(data_df)) {
+      data_df$location.long <- data_df$coords.x2
+    }
+    
     # get individuals
     individuals <- unique(data_df$tag.local.identifier)
     
