@@ -26,7 +26,7 @@ library(plotly)
 shinyModuleUserInterface <- function(id, label) {
   ns <- NS(id)
   tagList(
-    titlePanel("Inspect Stationarity"),
+    titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
       column(3,
@@ -54,7 +54,7 @@ shinyModuleUserInterface <- function(id, label) {
     fluidRow(
       column(3,
              # empty for now
-             helpText("This app helps to find stationarity. First a general overview of all data should help to spot individials, which are of potential interest. The statistic table should help to filter for those.")
+             helpText("This app helps to find stationarity and to explore animal tracking data. Three components: a statistics table, a map with the animal tracks and a time series plot help to analyze the given data set. The filters apply to all data sets but the indivial selection will not reduce the summary table to one individial and also only one indivial will be shown within the time series plot. Data is aggregated on a daily granularity and distances are calculated in meters. A potential workflow could start by spotting a single animal of interest on either the summary table or on the map and then the data can be filtered for this specific animal and also different date ranges analyzed. A date range always refers to the last n days of each given animal tracking series.")
              ),
       column(5,
              leafletOutput(ns("mymap"))
