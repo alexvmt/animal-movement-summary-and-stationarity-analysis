@@ -15,6 +15,7 @@ library(magrittr)
 library(htmlwidgets)
 library(htmltools)
 library(plotly)
+#library(rgeos)   # needed only if we also calculate the bounding box
 
 
 
@@ -304,7 +305,11 @@ shinyModule <- function(input, output, session, data) {
     if(input$dropdown_individual == "all") {
       selected_id <- 1:length(individual_colors)
     }
-    
+
+    if(input$dropdown_indi == "all"){
+      selected_id <- 1:length(cols)
+    }
+
     map  <- map %>% 
       addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
     
@@ -346,7 +351,20 @@ shinyModule <- function(input, output, session, data) {
       max_date <- max(individual_data_aggregated$date)
       meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
-      
+     
+      ## optional: calculate bounding box for lat and long
+      #coordinates <- cbind(lon, lat)
+      #spatial_points <- SpatialPoints(coordinates, proj4string = CRS("+proj=longlat"))
+
+      ## Convert to UTM (Universal Transverse Mercator) to preserve areas
+      #spatial_points_utm <- spTransform(spatial_points, CRS("+proj=utm"))
+
+      ## Calculate bounding box
+      #bbox <- bbox(spatial_points_utm)
+
+      ## Calculate area in square meters
+      #area <- gArea(as(rgeos::gBuffer(SpatialPoints(cbind((bbox[1,2] + bbox[1,1])/2, (bbox[2,2] + bbox[2,1])/2)), width=abs(bbox[1,2] - bbox[1,1])/2), "SpatialPolygons"))
+
       # store values
       individual_movement_summary <- c(individual,
                                        dim(individual_data_aggregated)[1],
