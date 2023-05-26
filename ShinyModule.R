@@ -94,16 +94,19 @@ shinyModule <- function(input, output, session, data) {
     # transform move object to dataframe
     data_df <- as.data.frame(data)
     
+    # reset row names
+    row.names(data_df) <- NULL
+    
     # cast tag.local.identifier to character
     data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
     
     # make sure right coordinates are used
     if ("coords.x1" %in% names(data_df)) {
-      data_df$location.lat <- data_df$coords.x1
+      data_df$location.long <- data_df$coords.x1
     }
     
     if ("coords.x2" %in% names(data_df)) {
-      data_df$location.long <- data_df$coords.x2
+      data_df$location.lat <- data_df$coords.x2
     }
     
     # get individuals
@@ -190,10 +193,12 @@ shinyModule <- function(input, output, session, data) {
   
   
   
-  ##### aggregate processed data by time interval and individual
+  ##### aggregate processed data
   rctv_data_aggregated <- reactive({
     
+    # aggregate distances by time interval and individual
     data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
+    
     data_aggregated
     
   })
@@ -276,23 +281,42 @@ shinyModule <- function(input, output, session, data) {
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
+      
       for (i in seq(along = individual_names)) {
+        
         map <- map %>% 
           addPolylines(data = data_df[data_df$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
-          addCircles(data = data_df[data_df$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = individual_colors[i], group = individual_names[i])
+          addCircles(data = data_df[data_df$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
+        
       }
+      
     } else {
+      
+      last_lon <- tail(data_df, 1)$location.long
+      last_lat <- tail(data_df, 1)$location.lat
+      
+      if (individual_colors[selected_id] == "#FF0000") {
+        color <- "green"
+      } else {
+        color <- "red"
+      }
+      
       map <- map %>% 
         addPolylines(data = data_df, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
-        addCircles(data = data_df, lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = individual_colors[selected_id], group = individual_names_original[selected_id])
+        addCircles(data = data_df, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
+        addCircleMarkers(lng = last_lon,
+                         lat = last_lat,
+                         label = paste0("lon: ", last_lon, "; lat: ", last_lat),
+                         color = color)
+      
     }
     
-    if(input$dropdown_individual == "all"){
+    if(input$dropdown_individual == "all") {
       selected_id <- 1:length(individual_colors)
     }
     
     map  <- map %>% 
-      addLegend(position = "topright", colors = individual_colors[selected_id], labels = individual_names_original[selected_id], opacity = 0.6)
+      addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
     
     map
     
