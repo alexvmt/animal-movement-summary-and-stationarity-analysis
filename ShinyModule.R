@@ -259,7 +259,11 @@ shinyModule <- function(input, output, session, data) {
     
     # get remaining individuals
     individual_names <- unique(processed_data_filtered$tag.local.identifier)
-    selected_id <- which(individual_names_original %in% input$dropdown_individual)
+    if (length(individual_names_original) == 1) {
+      selected_id <- 1
+    } else {
+      selected_id <- which(individual_names_original %in% input$dropdown_individual)
+    }
     
     # create map with lines for each individual
     map <- leaflet() %>% 
@@ -350,7 +354,7 @@ shinyModule <- function(input, output, session, data) {
                                        below_today,
                                        round(sum(individual_data_aggregated$distance_meters), 0),
                                        round(avg_distance, 0)
-                                       )
+      )
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
