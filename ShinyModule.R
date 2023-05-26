@@ -31,13 +31,15 @@ shinyModuleUserInterface <- function(id, label) {
       column(3,
              selectInput(ns("dropdown_individual"),
                          "Individual:",
-                         choices = c("Choice 1", "Choice 2", "Choice 3")),
+                         choices = c("all")),
              selectInput(ns("dropdown_date_range"),
                          "Date range:",
                          choices = list("last day" = 1,
                                         "last week" = 7,
-                                        "last month" = 30,
-                                        "last 6 months" = 180,
+                                        "last 30 days" = 30,
+                                        "last 60 days" = 60,
+                                        "last 90 days" = 90,
+                                        "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
                          selected = c("last year" = 365))
@@ -241,13 +243,12 @@ shinyModule <- function(input, output, session, data) {
     
     mv <- rctv_data()
     
-    # store individual colors and names
-    cols <- rainbow(length(namesIndiv(mv)))
-    data_spl <- move::split(mv)
-    indi_names_org <- namesIndiv(mv)
-    
     # convert to data frame to filter
     mvdf <- as.data.frame(mv)
+    
+    # store individual colors and names
+    indi_names_org <- unique(mvdf$tag.local.identifier)
+    cols <- rainbow(length(indi_names_org))
     
     # filter for date range and individuals
     if(input$dropdown_individual == "all"){
@@ -256,12 +257,20 @@ shinyModule <- function(input, output, session, data) {
       mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_individual, ]
     }
     
-    # convert back to move for plotting
-    mv <- move(mvdf)
+    # filter for date range
+    mvdf_filtered <- NULL
+    for(this_tag in unique(mvdf$tag.local.identifier)){
+      sub_mvdf <- mvdf[mvdf$tag.local.identifier==this_tag,]
+      tmpdates <- as.Date(sub_mvdf$timestamps)
+      maxtmpdates <- max(tmpdates)
+      sub_mvdf <- sub_mvdf[tmpdates > (maxtmpdates - as.numeric(input$dropdown_date_range)),]
+      mvdf_filtered <- rbind(mvdf_filtered, sub_mvdf)
+    }
+    mvdf <- mvdf_filtered
     
     # get remaining individuals
-    indi_names <- namesIndiv(mv)
-    selected_id <- which(indi_names_org %in% indi_names)
+    indi_names <- unique(mvdf$tag.local.identifier)
+    selected_id <- which(indi_names_org %in% input$dropdown_individual)
     
     # create map with lines for each animal, check if only one element is in the selected set
     map <- leaflet() %>% 
@@ -270,13 +279,17 @@ shinyModule <- function(input, output, session, data) {
     if(length(indi_names) > 1) {
       for (i in seq(along = indi_names)) {
         map <- map %>% 
-          addPolylines(data = coordinates(data_spl[[i]]), color = cols[i], opacity = 0.6,  group = indi_names[i], weight = 2) %>% 
-          addCircles(data = data_spl[[i]], fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
+          addPolylines(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, color = cols[i], opacity = 0.6,  group = indi_names[i], weight = 2) %>% 
+          addCircles(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
       }
     } else {
       map <- map %>% 
-        addPolylines(data = coordinates(mv), color = cols[selected_id], opacity = 0.6,  group = indi_names_org[selected_id], weight = 2) %>% 
-        addCircles(data = mv, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
+        addPolylines(data = mvdf, lat = ~location.lat, lng = ~location.long, color = cols[selected_id], opacity = 0.6,  group = indi_names_org[selected_id], weight = 2) %>% 
+        addCircles(data = mvdf, lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
+    }
+    
+    if(input$dropdown_individual == "all"){
+      selected_id <- 1:length(cols)
     }
     
     map  <- map %>% 
@@ -327,8 +340,8 @@ shinyModule <- function(input, output, session, data) {
                                        dim(individual_data_aggregated)[1],
                                        missing_days,
                                        below_today,
-                                       round(sum(individual_data_aggregated$distance_meters), 2),
-                                       round(avg_distance, 2)
+                                       round(sum(individual_data_aggregated$distance_meters), 0),
+                                       round(avg_distance, 0)
                                        )
       
       # append individual movement summary to existing dataframe
