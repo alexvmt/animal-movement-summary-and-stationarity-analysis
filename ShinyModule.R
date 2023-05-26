@@ -43,25 +43,25 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last year" = 365,
                                         "all time" = 99999),
                          selected = c("last year" = 365))
-             ),
+      ),
       column(9,
              DT::dataTableOutput(ns("movement_summary"))
-             )
-      ),
+      )
+    ),
     fluidRow(
       column(3,
              helpText("This app summarizes animal movement data and helps to find stationary tags.
                       First, a general overview of all data should help to spot individuals which are of potential interest.
                       The movement summary table should help to filter for those.")
-             ),
+      ),
       column(5,
              leafletOutput(ns("map"))
-             ),
+      ),
       column(4,
              plotlyOutput(ns("time_series"))
-             )
       )
     )
+  )
 }
 
 
@@ -71,7 +71,7 @@ shinyModuleUserInterface <- function(id, label) {
 ####################
 
 shinyModule <- function(input, output, session, data) {
-
+  
   # make loaded data reactive
   rctv_data <- reactive({ data })
   
@@ -186,16 +186,14 @@ shinyModule <- function(input, output, session, data) {
     rctv_processed_data <- processed_data
     rctv_processed_data
     
-    })
+  })
   
   
   
-  ##### aggregate processed data
+  ##### aggregate processed data by time interval and individual
   rctv_data_aggregated <- reactive({
     
-    # aggregate distances by time interval and individual
     data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
-    
     data_aggregated
     
   })
@@ -238,69 +236,69 @@ shinyModule <- function(input, output, session, data) {
   
   
   ##### map
-  #### make map as reactive object to be able to save it ####
-  mapFinal <- reactive({
+  map <- reactive({
     
-    mv <- rctv_data()
+    data <- rctv_data()
     
-    # convert to data frame to filter
-    mvdf <- as.data.frame(mv)
+    # transform move object to dataframe
+    data_df <- as.data.frame(data)
     
-    # store individual colors and names
-    indi_names_org <- unique(mvdf$tag.local.identifier)
-    cols <- rainbow(length(indi_names_org))
+    # store individual names and colors
+    individual_names_original <- unique(data_df$tag.local.identifier)
+    individual_colors <- rainbow(length(individual_names_original))
     
-    # filter for date range and individuals
-    if(input$dropdown_individual == "all"){
-      # do nothing
+    # filter for individual
+    if(input$dropdown_individual == "all") {
+      # do nothing and proceed
     } else {
-      mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_individual, ]
+      data_df <- data_df[data_df$tag.local.identifier == input$dropdown_individual, ]
     }
     
     # filter for date range
-    mvdf_filtered <- NULL
-    for(this_tag in unique(mvdf$tag.local.identifier)){
-      sub_mvdf <- mvdf[mvdf$tag.local.identifier==this_tag,]
-      tmpdates <- as.Date(sub_mvdf$timestamps)
-      maxtmpdates <- max(tmpdates)
-      sub_mvdf <- sub_mvdf[tmpdates > (maxtmpdates - as.numeric(input$dropdown_date_range)),]
-      mvdf_filtered <- rbind(mvdf_filtered, sub_mvdf)
+    data_df_filtered <- NULL
+    for(this_tag in unique(data_df$tag.local.identifier)){
+      individual_data_df <- data_df[data_df$tag.local.identifier == this_tag, ]
+      temp_dates <- as.Date(individual_data_df$timestamps)
+      max_temp_dates <- max(temp_dates)
+      individual_data_df <- individual_data_df[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
+      data_df_filtered <- rbind(data_df_filtered, individual_data_df)
     }
-    mvdf <- mvdf_filtered
+    
+    data_df <- data_df_filtered
     
     # get remaining individuals
-    indi_names <- unique(mvdf$tag.local.identifier)
-    selected_id <- which(indi_names_org %in% input$dropdown_individual)
+    individual_names <- unique(data_df$tag.local.identifier)
+    selected_id <- which(individual_names_original %in% input$dropdown_individual)
     
-    # create map with lines for each animal, check if only one element is in the selected set
+    # create map with lines for each individual
     map <- leaflet() %>% 
       addTiles() 
     
-    if(length(indi_names) > 1) {
-      for (i in seq(along = indi_names)) {
+    # check if only one element is in the selected set
+    if(length(individual_names) > 1) {
+      for (i in seq(along = individual_names)) {
         map <- map %>% 
-          addPolylines(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, color = cols[i], opacity = 0.6,  group = indi_names[i], weight = 2) %>% 
-          addCircles(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
+          addPolylines(data = data_df[data_df$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
+          addCircles(data = data_df[data_df$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = individual_colors[i], group = individual_names[i])
       }
     } else {
       map <- map %>% 
-        addPolylines(data = mvdf, lat = ~location.lat, lng = ~location.long, color = cols[selected_id], opacity = 0.6,  group = indi_names_org[selected_id], weight = 2) %>% 
-        addCircles(data = mvdf, lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
+        addPolylines(data = data_df, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
+        addCircles(data = data_df, lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = individual_colors[selected_id], group = individual_names_original[selected_id])
     }
     
     if(input$dropdown_individual == "all"){
-      selected_id <- 1:length(cols)
+      selected_id <- 1:length(individual_colors)
     }
     
     map  <- map %>% 
-      addLegend(position = "topright", colors = cols[selected_id], labels = indi_names_org[selected_id], opacity = 0.6)
+      addLegend(position = "topright", colors = individual_colors[selected_id], labels = individual_names_original[selected_id], opacity = 0.6)
     
     map
     
   })
   
-  ### render map to be able to see it ####
-  output$map <- renderLeaflet({ mapFinal() })
+  output$map <- renderLeaflet({ map() })
   
   
   
@@ -342,7 +340,7 @@ shinyModule <- function(input, output, session, data) {
                                        below_today,
                                        round(sum(individual_data_aggregated$distance_meters), 0),
                                        round(avg_distance, 0)
-                                       )
+      )
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
