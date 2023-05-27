@@ -15,7 +15,8 @@ library(magrittr)
 library(htmlwidgets)
 library(htmltools)
 library(plotly)
-
+library(DT)
+library(RColorBrewer)
 
 
 ####################
@@ -72,8 +73,8 @@ shinyModule <- function(input, output, session, data) {
     # wait until the data is loaded
     if (is.null(data)) return()
     data_df <- as.data.frame(data)
-    keys <- c(data_df$tag.local.identifier, "all")
-    values <- c(data_df$tag.local.identifier, "all")
+    keys <- c(as.character(data_df$tag.local.identifier), "all")
+    values <- c(as.character(data_df$tag.local.identifier), "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
   })
@@ -238,7 +239,8 @@ shinyModule <- function(input, output, session, data) {
     
     # store individual names and colors
     individual_names_original <- unique(processed_data$tag.local.identifier)
-    individual_colors <- rainbow(length(individual_names_original))
+    individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
+    #   individual_colors <- rainbow(length(individual_names_original))
     
     # filter for individual
     if(input$dropdown_individual == "all") {
@@ -284,12 +286,9 @@ shinyModule <- function(input, output, session, data) {
       
       last_lon <- tail(processed_data_filtered, 1)$location.long
       last_lat <- tail(processed_data_filtered, 1)$location.lat
-      
-      if (individual_colors[selected_id] == "#FF0000") {
-        color <- "green"
-      } else {
-        color <- "red"
-      }
+     
+      # last marker color 
+      marker_color <- "red"
       
       map <- map %>% 
         addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
@@ -297,7 +296,7 @@ shinyModule <- function(input, output, session, data) {
         addCircleMarkers(lng = last_lon,
                          lat = last_lat,
                          label = paste0("lon: ", last_lon, "; lat: ", last_lat),
-                         color = color)
+                         color = marker_color)
       
     }
     
