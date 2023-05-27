@@ -6,7 +6,7 @@ Github repository: https://github.com/alexvmt/animal-movement-summary-and-statio
 
 ## Description
 Exploratory app, which should help as a starting point to detect stationarity in data sets. A descriptive statistic summarizes the given tracking data to spot less movement, visualizes the tracks on a map, and shows for one individial a zoomable time series plot of moved distances from one day to another. The interface allows to filter for individials and specific date ranges (such as last week / 30 days / 90 days / half a year/ ...).
-
+ 
 
 
 ## Documentation
