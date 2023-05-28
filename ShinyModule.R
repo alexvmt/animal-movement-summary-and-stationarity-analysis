@@ -188,8 +188,13 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_aggregated <- reactive({
     
     # aggregate distances by time interval and individual
-    data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
-    
+   data_aggregated <- rctv_processed_data() %>%
+	   		filter(!is.na(distance_meters)) %>%
+	   		group_by(date, tag.local.identifier) %>%
+	   		summarize(distance_meters = sum(distance_meters, na.rm=TRUE),
+				  measures_per_date = n() 
+			)
+
     data_aggregated
     
   })
@@ -240,7 +245,6 @@ shinyModule <- function(input, output, session, data) {
     # store individual names and colors
     individual_names_original <- unique(processed_data$tag.local.identifier)
     individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
-    #   individual_colors <- rainbow(length(individual_names_original))
     
     # filter for individual
     if(input$dropdown_individual == "all") {
@@ -273,15 +277,11 @@ shinyModule <- function(input, output, session, data) {
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
-      
       for (i in seq(along = individual_names)) {
-        
         map <- map %>% 
           addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
-        
       }
-      
     } else {
       
       last_lon <- tail(processed_data_filtered, 1)$location.long
@@ -310,7 +310,8 @@ shinyModule <- function(input, output, session, data) {
     map
     
   })
-  
+ 
+
   output$map <- renderLeaflet({ map() })
   
   
