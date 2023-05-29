@@ -1,5 +1,5 @@
 ####################
-# Setup
+# setup
 ####################
 
 # load packages
@@ -15,12 +15,12 @@ library(magrittr)
 library(htmlwidgets)
 library(htmltools)
 library(plotly)
-#library(rgeos)   # needed only if we also calculate the bounding box
-
+library(DT)
+library(RColorBrewer)
 
 
 ####################
-# User interface
+# user interface
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
@@ -30,27 +30,22 @@ shinyModuleUserInterface <- function(id, label) {
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
       column(3,
-             selectInput(ns("dropdown_indi"),
-                         "Individium:",
-                         choices = c("Choice 1", "Choice 2", "Choice 3")),
-             selectInput(ns("dropdown_date"),
+             selectInput(ns("dropdown_individual"),
+                         "Individual:",
+                         choices = c("all")),
+             selectInput(ns("dropdown_date_range"),
                          "Date range:",
                          choices = list("last day" = 1,
                                         "last week" = 7,
                                         "last 30 days" = 30,
-					"last 90 days" = 90,
-                                        "last 6 months" = 180,
+                                        "last 60 days" = 60,
+                                        "last 90 days" = 90,
+                                        "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
-                         selected = c("last year" = 365))
-             # TODO: decide if we add this; default should be daily
-                        # choices = c("daily", "hourly"), selected = "daily"),
-             # TODO: remove outliers; unprobable distances > 100km/h per day; add checkbox
-             ),
-      column(9,
-             DT::dataTableOutput(ns("table"))
-             )
-      ),
+                         selected = c("last year" = 365))),
+      column(9, DT::dataTableOutput(ns("movement_summary")))
+    ),
     fluidRow(
       column(3,
              # empty for now
@@ -65,47 +60,56 @@ A potential workflow could start by spotting a single animal of interest in eith
 Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
 A date range always refers to the last n days of each given animal tracking series."
 	     )),
-      column(5,
-             leafletOutput(ns("mymap"))
-             ),
-      column(4,
-             plotlyOutput(ns("ts_plot"))
-             )
-      )
+      column(5, leafletOutput(ns("map"))),
+      column(4, plotlyOutput(ns("time_series")))
     )
+  )
 }
 
 
 
 ####################
-# Server
+# server
 ####################
 
 shinyModule <- function(input, output, session, data) {
-
-  #### interactive object to read in .RData file  ####
-  mvObj <- reactive({ data })
   
+  # make loaded data reactive
+  rctv_data <- reactive({ data })
+  
+  # generate inputs for dropdowns
   observe({
     # wait until the data is loaded
     if (is.null(data)) return()
-    # TODO: find a better/more stable way than gsub for removing the X
-    # Update the dropdown with the unique values from the 'id' column of the loaded data
     data_df <- as.data.frame(data)
-    keys <- c(data_df$tag.local.identifier, "all")
-    values <- c(data_df$tag.local.identifier, "all")
+    keys <- c(as.character(data_df$tag.local.identifier), "all")
+    values <- c(as.character(data_df$tag.local.identifier), "all")
     key_value_list <- setNames(values, keys)
-    updateSelectInput(session, "dropdown_indi", choices = key_value_list, selected = c("all" = "all")) 
+    updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
   })
   
-  # data depends on user input
+  
+  
+  ##### process loaded data
   rctv_processed_data <- reactive({
     
     # transform move object to dataframe
     data_df <- as.data.frame(data)
     
+    # reset row names
+    row.names(data_df) <- NULL
+    
     # cast tag.local.identifier to character
     data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
+    
+    # make sure right coordinates are used
+    if ("coords.x1" %in% names(data_df)) {
+      data_df$location.long <- data_df$coords.x1
+    }
+    
+    if ("coords.x2" %in% names(data_df)) {
+      data_df$location.lat <- data_df$coords.x2
+    }
     
     # get individuals
     individuals <- unique(data_df$tag.local.identifier)
@@ -120,7 +124,7 @@ shinyModule <- function(input, output, session, data) {
     colnames(processed_data) <- processed_data_columns
     
     # select time window
-    last_n_days <- as.numeric(input$dropdown_date)
+    last_n_days <- as.numeric(input$dropdown_date_range)
     
     # process last n days of observations per individual
     for(individual in individuals) {
@@ -130,9 +134,6 @@ shinyModule <- function(input, output, session, data) {
       
       # subset data to relevant columns
       individual_data <- individual_data[ , processed_data_columns]
-      
-      # TODO: maybe interpolate with 0s and mark in an additional row that this data was missing;
-      #       could be show in a different color in the visualization then
       
       # drop rows with missing values
       individual_data <- na.omit(individual_data)
@@ -174,11 +175,8 @@ shinyModule <- function(input, output, session, data) {
     
     # calculate distance between two location measurements
     calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
-      
       if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-      
       distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
-      
     }
     
     processed_data$distance_meters <- mapply(lon_a = processed_data$location.long,
@@ -188,50 +186,52 @@ shinyModule <- function(input, output, session, data) {
                                              FUN = calculate_distance_in_meters_between_coordinates)
     
     rctv_processed_data <- processed_data
+    
     rctv_processed_data
     
-    }) # end of reactive data processing
+  })
   
-  rctv_agg_data <- reactive({
+  
+  
+  ##### aggregate processed data
+  rctv_data_aggregated <- reactive({
     
     # aggregate distances by time interval and individual
     data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
+    
     data_aggregated
     
   })
   
   
   
-  ##### Time series
-  
-  # render plotly plot
-  output$ts_plot <- renderPlotly({
+  ##### time series
+  output$time_series <- renderPlotly({
     
     # load reactive data
-    data_agg_id_date <- rctv_agg_data()
+    data_aggregated <- rctv_data_aggregated()
     
-    if(input$dropdown_indi == "all") {
-      # TODO: define a function to plot all and not just the first given one
-      id <- data_agg_id_date$tag.local.identifier[1]
+    # select individual to plot data for
+    if(input$dropdown_individual == "all") {
+      individual <- data_aggregated$tag.local.identifier[1]
     } else {
-      id <- input$dropdown_indi
+      individual <- input$dropdown_individual
     }
     
-    # plot time series for selected individual
-    data_to_plot <- data_agg_id_date[data_agg_id_date$tag.local.identifier == id, ]
+    # get data to plot
+    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
     
+    # set date scale
     if (dim(data_to_plot)[1] > 30) {
       scale <- "1 week"
     } else {
       scale <- "1 day"
     }
     
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = id) %>% 
-      # add_trace(y = ~Series2, name = 'Series 2', mode = 'lines') %>% 
-      # add_trace(y = ~Series3, name = 'Series 3', mode = 'lines') %>% 
-      # layout(title = paste0("Distance per individual ", id, " between ", start_date, " and ", end_date), showlegend = TRUE)
+    # plot time series for selected individual
+    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
       layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
@@ -240,157 +240,141 @@ shinyModule <- function(input, output, session, data) {
   
   
   
-  ##### Map
-  
-  # TODO: consider using https://movevis.org/ to create an interactive map
-  
-  #### make map as reactive object to be able to save it ####
-  mapFinal <- reactive({
+  ##### map
+  map <- reactive({
     
-    mv <- mvObj()
+    # load reactive data
+    processed_data <- rctv_processed_data()
     
-    # store individual colors and names
-    #cols <- rainbow(length(namesIndiv(mv)))
-    #data_spl <- move::split(mv)
-    #indi_names_org <- namesIndiv(mv)
+    # store individual names and colors
+    individual_names_original <- unique(processed_data$tag.local.identifier)
+    individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
+    #   individual_colors <- rainbow(length(individual_names_original))
     
-    # convert to data frame to filter
-    mvdf <- as.data.frame(mv)
-   
-    # store individual colors and names
-    indi_names_org <- unique(mvdf$tag.local.identifier)
-    #cols <- viridis(length(indi_names_org))
-    cols <- rainbow(length(indi_names_org))
-
-    # filter for date range and individuals
-    if(input$dropdown_indi == "all"){
-      # do nothing
+    # filter for individual
+    if(input$dropdown_individual == "all") {
+      # do nothing and proceed
     } else {
-      mvdf <- mvdf[mvdf$tag.local.identifier == input$dropdown_indi, ]
+      processed_data <- processed_data[processed_data$tag.local.identifier == input$dropdown_individual, ]
     }
-
-     # filter for date range
-    mvdf_filtered <- NULL
-    for(this_tag in unique(mvdf$tag.local.identifier)){
-        sub_mvdf <- mvdf[mvdf$tag.local.identifier==this_tag,]
-        tmpdates <- as.Date(sub_mvdf$timestamps)
-        maxtmpdates <- max(tmpdates)
-        sub_mvdf <- sub_mvdf[tmpdates > (maxtmpdates - as.numeric(input$dropdown_date)),]
-        mvdf_filtered <- rbind(mvdf_filtered, sub_mvdf)
+    
+    # filter for date range
+    processed_data_filtered <- NULL
+    for(this_tag in unique(processed_data$tag.local.identifier)) {
+      individual_processed_data <- processed_data[processed_data$tag.local.identifier == this_tag, ]
+      temp_dates <- as.Date(individual_processed_data$timestamps)
+      max_temp_dates <- max(temp_dates)
+      individual_processed_data <- individual_processed_data[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
+      processed_data_filtered <- rbind(processed_data_filtered, individual_processed_data)
     }
-    mvdf <- mvdf_filtered
     
     # get remaining individuals
-    indi_names <- unique(mvdf$tag.local.identifier)
-    selected_id <- which(indi_names_org %in% input$dropdown_indi)
+    individual_names <- unique(processed_data_filtered$tag.local.identifier)
+    if (length(individual_names_original) == 1) {
+      selected_id <- 1
+    } else {
+      selected_id <- which(individual_names_original %in% input$dropdown_individual)
+    }
     
-    # create map with lines for each animal, check if only one element is in the selected set
+    # create map with lines for each individual
     map <- leaflet() %>% 
       addTiles() 
     
-    if(length(indi_names) > 1) {
-      for (i in seq(along = indi_names)) {
+    # check if only one element is in the selected set
+    if(length(individual_names) > 1) {
+      
+      for (i in seq(along = individual_names)) {
+        
         map <- map %>% 
-          addPolylines(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, color = cols[i], opacity = 0.6,  group = indi_names[i], weight = 2) %>% 
-          addCircles(data = mvdf[mvdf$tag.local.identifier==indi_names[i],], lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[i], group = indi_names[i])
+          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
+          addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
+        
       }
+      
     } else {
-      ## Calculate opacities based on time
-      #mvdf$date <- as.Date(mvdf$timestamps)	    
-      #max_time <- max(mvdf$date)
-      #min_time <- min(mvdf$date)
-      #mvdf$this_opacity <- (as.numeric(mvdf$date - min_time) / as.numeric(max_time - min_time))^2
-
+      
+      last_lon <- tail(processed_data_filtered, 1)$location.long
+      last_lat <- tail(processed_data_filtered, 1)$location.lat
+     
+      # last marker color 
+      marker_color <- "red"
+      
       map <- map %>% 
-        addPolylines(data = mvdf, lat = ~location.lat, lng = ~location.long, color = cols[selected_id], opacity = 0.6,  group = indi_names_org[selected_id], weight = 2) %>% 
-        addCircles(data = mvdf, lat = ~location.lat, lng = ~location.long, fillOpacity = 0.3, opacity = 0.5, color = cols[selected_id], group = indi_names_org[selected_id])
+        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
+        addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
+        addCircleMarkers(lng = last_lon,
+                         lat = last_lat,
+                         label = paste0("lon: ", last_lon, "; lat: ", last_lat),
+                         color = marker_color)
+      
     }
-
-    if(input$dropdown_indi == "all"){
-      selected_id <- 1:length(cols)
+    
+    if(input$dropdown_individual == "all") {
+      selected_id <- 1:length(individual_colors)
     }
 
     map  <- map %>% 
-      addLegend(position = "topright", colors = cols[selected_id], labels = indi_names_org[selected_id], opacity = 0.6)
+      addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
     
     map
     
   })
   
-  ### render map to be able to see it ####
-  output$mymap <- renderLeaflet({ mapFinal() })
+  output$map <- renderLeaflet({ map() })
   
   
   
-  ##### Movement summary
-  
-  rctv_summary <- reactive({
+  ##### movement summary
+  rctv_movement_summary <- reactive({
     
-    data_agg_id_date <- rctv_agg_data()
+    # load reactive data
+    data_aggregated <- rctv_data_aggregated()
     
     # get individuals
-    individuals <- unique(data_agg_id_date$tag.local.identifier)
+    individuals <- unique(data_aggregated$tag.local.identifier)
     
-    # TODO: add column for n days with almost no movement/2x below stdev
-    # TODO: missing data today / in time series?
-    # TODO: less movement than expected => below_today, to be discussed
+    # create empty dataframe to store movement summary
+    movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance (m)", "avg. distance (m)")
+    movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
+    colnames(movement_summary) <- movement_summary_columns
     
-    # create empty dataframe to store summary data
-    colnames_summary <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance", "avg. distance")
-    summary <- data.frame(matrix(ncol = length(colnames_summary), nrow = 0))
-    colnames(summary) <- colnames_summary
-    
-    # compute summary statistics for last n days per individual
+    # compute movement summary for last n days per individual
     for(individual in individuals) {
       
       # filter data based on individual
-      individual_agg_data <- data_agg_id_date[data_agg_id_date$tag.local.identifier == individual, ]
+      individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
-      # calculate missing days / account for all set to 99999
-      missing_days <- as.numeric(input$dropdown_date) - dim(individual_agg_data)[1]
+      # calculate missing days (account for all set to 99999)
+      missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
-      # calculate below average of today
-      avg_distance <- mean(individual_agg_data$distance_meters)
-      sd_distance <- sd(individual_agg_data$distance_meters)
-      max_date <- max(individual_agg_data$date)
-      meters_today <- individual_agg_data[individual_agg_data$date == max_date, "distance_meters"] 
+      # calculate today below average
+      avg_distance <- mean(individual_data_aggregated$distance_meters)
+      sd_distance <- sd(individual_data_aggregated$distance_meters)
+      max_date <- max(individual_data_aggregated$date)
+      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
-     
-      ## optional: calculate bounding box for lat and long
-      #coordinates <- cbind(lon, lat)
-      #spatial_points <- SpatialPoints(coordinates, proj4string = CRS("+proj=longlat"))
-
-      ## Convert to UTM (Universal Transverse Mercator) to preserve areas
-      #spatial_points_utm <- spTransform(spatial_points, CRS("+proj=utm"))
-
-      ## Calculate bounding box
-      #bbox <- bbox(spatial_points_utm)
-
-      ## Calculate area in square meters
-      #area <- gArea(as(rgeos::gBuffer(SpatialPoints(cbind((bbox[1,2] + bbox[1,1])/2, (bbox[2,2] + bbox[2,1])/2)), width=abs(bbox[1,2] - bbox[1,1])/2), "SpatialPolygons"))
 
       # store values
-      individual_summary_data <- c(unique(individual_agg_data$tag.local.identifier),
-                                   dim(individual_agg_data)[1],
-                                   missing_days,
-                                   below_today,
-                                   round(sum(individual_agg_data$distance_meters), 0),
-                                   round(avg_distance, 0)
-                                   )
+      individual_movement_summary <- c(individual,
+                                       dim(individual_data_aggregated)[1],
+                                       missing_days,
+                                       below_today,
+                                       round(sum(individual_data_aggregated$distance_meters), 0),
+                                       round(avg_distance, 0)
+      )
       
-      # append summary data to existing dataframe
-      summary[nrow(summary) + 1, ] <- individual_summary_data
+      # append individual movement summary to existing dataframe
+      movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
     
-    summary
+    movement_summary
     
   })
   
-  # plot a table
-  output$table <- DT::renderDataTable({ DT::datatable(rctv_summary()) })
+  output$movement_summary <- DT::renderDataTable({ DT::datatable(rctv_movement_summary()) })
   
-  return(mvObj)
+  return(rctv_data)
   
 }
