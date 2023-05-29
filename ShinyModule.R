@@ -48,9 +48,18 @@ shinyModuleUserInterface <- function(id, label) {
     ),
     fluidRow(
       column(3,
-             helpText("This app summarizes animal movement data and helps to find stationary tags.
-                      First, a general overview of all data should help to spot individuals which are of potential interest.
-                      The movement summary table should help to filter for those.")),
+             # empty for now
+             helpText(
+"This app helps to find stationarity in animal movement and to explore animal tracking data.
+Three components: a movement summary table, a map with animal tracks (and last coordinates) and a time series plot help to analyze a given dataset.
+The date range filter applies to all individuals in a given dataset and all three components in the app.
+Selecting an individual will not affect the movement summary table.
+Only the map and time series plot will be filtered.
+Data is aggregated on a daily granularity and distances are calculated in meters.
+A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
+Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
+A date range always refers to the last n days of each given animal tracking series."
+	     )),
       column(5, leafletOutput(ns("map"))),
       column(4, plotlyOutput(ns("time_series")))
     )
