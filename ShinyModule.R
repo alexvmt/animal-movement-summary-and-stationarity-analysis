@@ -17,6 +17,7 @@ library(htmltools)
 library(plotly)
 library(DT)
 library(RColorBrewer)
+library(dplyr)
 
 
 ####################
@@ -191,7 +192,7 @@ shinyModule <- function(input, output, session, data) {
    data_aggregated <- rctv_processed_data() %>%
 	   		filter(!is.na(distance_meters)) %>%
 	   		group_by(date, tag.local.identifier) %>%
-	   		summarize(distance_meters = sum(distance_meters, na.rm=TRUE),
+	   		summarise(distance_meters = sum(distance_meters, na.rm=TRUE),
 				  measures_per_date = n() 
 			)
 
@@ -227,7 +228,7 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # plot time series for selected individual
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
+    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
       layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
@@ -324,6 +325,13 @@ shinyModule <- function(input, output, session, data) {
     
     # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
+
+    # calculate average measuers per day and variance
+    measures_aggregated <- data_aggregated %>% 
+				    group_by(tag.local.identifier) %>% 
+				    summarise(avg_measures = round(mean(measures_per_date),1),
+				    	      var_measures = round(var(measures_per_date),1)
+				    )
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance (m)", "avg. distance (m)")
@@ -360,6 +368,9 @@ shinyModule <- function(input, output, session, data) {
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
+
+    # join avg and var movement
+    movement_summary <- movement_summary %>% left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
     
     movement_summary
     
