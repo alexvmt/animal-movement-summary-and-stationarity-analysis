@@ -74,8 +74,8 @@ shinyModule <- function(input, output, session, data) {
     # wait until the data is loaded
     if (is.null(data)) return()
     data_df <- as.data.frame(data)
-    keys <- c(as.character(data_df$tag.local.identifier), "all")
-    values <- c(as.character(data_df$tag.local.identifier), "all")
+    keys <- c(sort(as.character(data_df$tag.local.identifier)), "all")
+    values <- c(sort(as.character(data_df$tag.local.identifier)), "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
   })
@@ -219,7 +219,12 @@ shinyModule <- function(input, output, session, data) {
     data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
-    
+
+    # generate sequence of dates, and fill missing dates with zero
+    date_seq <- data.frame(date = seq(start_date, end_date, by = "day"))
+    data_to_plot <- date_seq %>% left_join(data_to_plot)
+    data_to_plot[is.na(data_to_plot)] <- 0
+
     # set date scale
     if (dim(data_to_plot)[1] > 30) {
       scale <- "1 week"
@@ -371,7 +376,8 @@ shinyModule <- function(input, output, session, data) {
 
     # join avg and var movement
     movement_summary <- movement_summary %>% left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
-    
+    movement_summary_columns <- c(colnames(movement_summary), "avg. measures", "var. measures")
+
     movement_summary
     
   })
