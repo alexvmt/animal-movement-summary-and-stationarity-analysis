@@ -5,45 +5,45 @@ MoveApps
 Github repository: https://github.com/alexvmt/animal-movement-summary-and-stationarity-analysis
 
 ## Description
-Exploratory app, which should help as a starting point to detect stationarity in data sets. A descriptive statistic summarizes the given tracking data to spot less movement, visualizes the tracks on a map, and shows for one individial a zoomable time series plot of moved distances from one day to another. The interface allows to filter for individials and specific date ranges (such as last week / 30 days / 90 days / half a year/ ...).
+Exploratory app that should help as a starting point to detect stationarity in animal tracking datasets. A descriptive statistics table (movement summary) summarizes the given tracking data to spot anomalous behavior, visualizes animal tracks and last coordinates on a map and shows for a selected individual a zoomable time series plot of moved distances from one day to another. The interface allows to filter for individials and specific date ranges (such as last week / 30 days / 90 days / half a year / ...).
  
 
 
 ## Documentation
-The app processes the given data set and fills a dropdown with the given individials (tag.local.identifier as unique ID). This dropdown can be used to analyse a single animal of a tracked group of animals. Next to the dropdown a date range filter helps to focus on more recent periods of time. The filter is always cutting of the last n days of each given track. The processing itself contains the following steps:
+The app processes a given data set and fills a dropdown with the given individuals (`tag.local.identifier` is used as unique id). This dropdown can be used to analyze a single animal of a tracked group of animals. In addition, a date range filter helps to focus on more recent periods of time. The filter is always cutting off the last n days of each given track. The processing itself contains the following steps:
 - drop rows with missing or duplicated values
-- filter on given date range and potentially individial
+- filter on given date range and potentially individual
 - calculate distance between coordinates in meters
 - aggregate data per day (not used for the map)
 
 The analysis consists of three components:
 a) Statistics table: summarizing some key figures of the single animals
-b) Tracker Map: showing the tracks on a map
-c) Timeseries plot: showing the moved distance from one day to another of a single animal
+b) Tracker map: showing the tracks and last coordinates
+c) Time series plot: showing the moved distance from one day to another of a single animal
 
 a) Statistics table
-This sortable table (only one column can be used for this) shows the following stats for each individial (the individial filter does not influence the table):
+This sortable table (only one column can be used for this) shows the following stats for each individual for the selected date range (the individual filter does not influence the table):
 - number of observations
-- days without observations (are there fewer observations than days)
-- was today's total movement below the 1.5x standard deviation of current date range
-- total distance covered (in meters)
-- average distance (in meters)
+- days without observations (Are there fewer observations than days in the selected date range?)
+- was today's total movement below the 1.5x standard deviation of the current date range
+- total distance moved (in meters)
+- average distance moved (in meters)
 
 b) Tracker map
-Show the movement of all or single animals on a map. Identify different behavior patterns for different date ranges and differences between single animals. Both date range and individials influence this view.
+Show the movement of all or single animals and their last coordinates on a map. Identify different behavior patterns for different date ranges and differences between single animals. Both date range and individual filters influence this view.
 
-c) Timeseries plot
-Shows per default the time series for the first found indivial. The dropdown can then be used to show different animals in this plot. the timeseries is interactive an the user can zoom into specific regions of interest.
+c) Time series plot
+Shows per default the time series for the first found individual. The dropdown can then be used to show different animals in this plot. The time series is interactive and the user can zoom into specific regions of interest.
 
 
 Potential workflow:
-1. Use the summary table to identify individials of interest, which have been moving a little or not throughout the last week for example (use the date range filter to decide on a suitable time frame).
+1. Use the movement summary table to identify individuals of interest that have been moving only a little or not at all throughout the last week for example (use the date range filter to decide on a suitable time frame).
 
-2. Use the dropdown to filter for the animal of interest to explore its behavior on the map. This could help to answer questions such as: is the animal in a location of potential nesting place? are there any pecularities in the recent movements?
+2. Use the dropdown to filter for the animal of interest to explore its behavior on the map. This could help to answer questions such as: Is the animal in the area of a potential nesting place? Are there any pecularities in the recent movements?
 
-3. Use the timeseries to spot a decrease of movement (as compared to the previous days/weeks). Is it moving significantly less? Is this usual for the season as compared to the previous year? Is there data missing or is there no movement at all?
+3. Use the time series plot to spot a decrease of movement (as compared to the previous days/weeks). Is it moving significantly less? Is this usual for the season as compared to the previous year? Is there data missing or is there no movement at all?
 
-This exemplary workflow might be helpful to spot unusual animal/tracker behavior.
+This exemplary workflow might be helpful to spot unusual animal behavior.
 
 
 
@@ -51,16 +51,16 @@ This exemplary workflow might be helpful to spot unusual animal/tracker behavior
 MoveStack in Movebank format
 
 ### Output data
-Shiny user interface (UI) moveStack in Movebank format
+Shiny user interface (UI)
 
 ### Artefacts
 None.
 
 ### Settings
-No predefined settings needed. The app allows to apply two filters on individials and date ranges.
+No predefined settings needed. The app allows to apply two filters on individuals and date ranges.
 
 ### Most common errors
 None known yet.
 
 ### Null or error handling
-Data is taken as is and only aggregated for the visualization.
+Data is taken as is and only aggregated for the visualizations.
