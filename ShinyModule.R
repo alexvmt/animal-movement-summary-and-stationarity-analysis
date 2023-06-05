@@ -17,7 +17,10 @@ library(htmltools)
 library(plotly)
 library(DT)
 library(RColorBrewer)
+library(dplyr)
 
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 
 ####################
 # user interface
@@ -43,7 +46,7 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
-                         selected = c("last year" = 365))),
+                         selected = c("last 180 days" = 180))),
       column(9, DT::dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
@@ -82,8 +85,8 @@ shinyModule <- function(input, output, session, data) {
     # wait until the data is loaded
     if (is.null(data)) return()
     data_df <- as.data.frame(data)
-    keys <- c(as.character(data_df$tag.local.identifier), "all")
-    values <- c(as.character(data_df$tag.local.identifier), "all")
+    keys <- c(sort(as.character(data_df$tag.local.identifier)), "all")
+    values <- c(sort(as.character(data_df$tag.local.identifier)), "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
   })
@@ -197,8 +200,13 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_aggregated <- reactive({
     
     # aggregate distances by time interval and individual
-    data_aggregated <- aggregate(distance_meters ~ date + tag.local.identifier, data = rctv_processed_data(), FUN = sum)
-    
+   data_aggregated <- rctv_processed_data() %>%
+	   		filter(!is.na(distance_meters)) %>%
+	   		group_by(date, tag.local.identifier) %>%
+	   		summarise(distance_meters = sum(distance_meters, na.rm=TRUE),
+				  measures_per_date = n() 
+			)
+
     data_aggregated
     
   })
@@ -222,7 +230,12 @@ shinyModule <- function(input, output, session, data) {
     data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
-    
+
+    # generate sequence of dates, and fill missing dates with zero
+    date_seq <- data.frame(date = seq(start_date, end_date, by = "day"))
+    data_to_plot <- date_seq %>% left_join(data_to_plot)
+    data_to_plot[is.na(data_to_plot)] <- 0
+
     # set date scale
     if (dim(data_to_plot)[1] > 30) {
       scale <- "1 week"
@@ -231,7 +244,7 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # plot time series for selected individual
-    p <- plot_ly(data_to_plot, x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
+    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
       layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
@@ -248,9 +261,10 @@ shinyModule <- function(input, output, session, data) {
     
     # store individual names and colors
     individual_names_original <- unique(processed_data$tag.local.identifier)
-    individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
-    #   individual_colors <- rainbow(length(individual_names_original))
-    
+    #individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
+   
+    individual_colors <- col_vector[1:length(individual_names_original)]
+
     # filter for individual
     if(input$dropdown_individual == "all") {
       # do nothing and proceed
@@ -276,37 +290,33 @@ shinyModule <- function(input, output, session, data) {
       selected_id <- which(individual_names_original %in% input$dropdown_individual)
     }
     
+    this_line_opacity = 0.9
+    this_line_weight  = 3
+
     # create map with lines for each individual
     map <- leaflet() %>% 
       addTiles() 
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
-      
       for (i in seq(along = individual_names)) {
-        
         map <- map %>% 
-          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
+          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
-        
       }
-      
     } else {
       
-      last_lon <- tail(processed_data_filtered, 1)$location.long
-      last_lat <- tail(processed_data_filtered, 1)$location.lat
-     
-      # last marker color 
-      marker_color <- "red"
-      
+      last_lon  <- tail(processed_data_filtered, 1)$location.long
+      last_lat  <- tail(processed_data_filtered, 1)$location.lat
+      last_time <- tail(processed_data_filtered, 1)$timestamps 
+
       map <- map %>% 
-        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
+        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
         addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
-        addCircleMarkers(lng = last_lon,
+        addMarkers(lng = last_lon,  #addCircleMarkers
                          lat = last_lat,
-                         label = paste0("lon: ", last_lon, "; lat: ", last_lat),
-                         color = marker_color)
-      
+                         label = paste0("time: ", last_time)
+			 )
     }
     
     if(input$dropdown_individual == "all") {
@@ -319,7 +329,8 @@ shinyModule <- function(input, output, session, data) {
     map
     
   })
-  
+ 
+
   output$map <- renderLeaflet({ map() })
   
   
@@ -332,6 +343,13 @@ shinyModule <- function(input, output, session, data) {
     
     # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
+
+    # calculate average measuers per day and variance
+    measures_aggregated <- data_aggregated %>% 
+				    group_by(tag.local.identifier) %>% 
+				    summarise(avg_measures = round(mean(measures_per_date),1),
+				    	      var_measures = round(var(measures_per_date),1)
+				    )
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance (m)", "avg. distance (m)")
@@ -368,7 +386,14 @@ shinyModule <- function(input, output, session, data) {
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
-    
+
+    # join avg and var movement
+    movement_summary <- movement_summary %>% left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
+    colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
+
+    # TODO: convert column to numeric
+    # apply(movement_summary, 2, as.numeric)
+
     movement_summary
     
   })
@@ -376,5 +401,5 @@ shinyModule <- function(input, output, session, data) {
   output$movement_summary <- DT::renderDataTable({ DT::datatable(rctv_movement_summary()) })
   
   return(rctv_data)
-  
-}
+
+ }
