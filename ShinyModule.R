@@ -19,6 +19,8 @@ library(DT)
 library(RColorBrewer)
 library(dplyr)
 
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
 
 ####################
 # user interface
@@ -44,7 +46,7 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
-                         selected = c("last year" = 365))),
+                         selected = c("last 180 days" = 180))),
       column(9, DT::dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
@@ -250,8 +252,10 @@ shinyModule <- function(input, output, session, data) {
     
     # store individual names and colors
     individual_names_original <- unique(processed_data$tag.local.identifier)
-    individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
-    
+    #individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
+   
+    individual_colors <- col_vector[1:length(individual_names_original)]
+
     # filter for individual
     if(input$dropdown_individual == "all") {
       # do nothing and proceed
@@ -277,6 +281,9 @@ shinyModule <- function(input, output, session, data) {
       selected_id <- which(individual_names_original %in% input$dropdown_individual)
     }
     
+    this_line_opacity = 0.9
+    this_line_weight  = 3
+
     # create map with lines for each individual
     map <- leaflet() %>% 
       addTiles() 
@@ -285,25 +292,22 @@ shinyModule <- function(input, output, session, data) {
     if(length(individual_names) > 1) {
       for (i in seq(along = individual_names)) {
         map <- map %>% 
-          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.6,  group = individual_names[i], weight = 2) %>% 
+          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
       }
     } else {
       
-      last_lon <- tail(processed_data_filtered, 1)$location.long
-      last_lat <- tail(processed_data_filtered, 1)$location.lat
-     
-      # last marker color 
-      marker_color <- "red"
-      
+      last_lon  <- tail(processed_data_filtered, 1)$location.long
+      last_lat  <- tail(processed_data_filtered, 1)$location.lat
+      last_time <- tail(processed_data_filtered, 1)$timestamps 
+
       map <- map %>% 
-        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.6,  group = individual_names_original[selected_id], weight = 2) %>% 
+        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
         addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
-        addCircleMarkers(lng = last_lon,
+        addMarkers(lng = last_lon,  #addCircleMarkers
                          lat = last_lat,
-                         label = paste0("lon: ", last_lon, "; lat: ", last_lat),
-                         color = marker_color)
-      
+                         label = paste0("time: ", last_time)
+			 )
     }
     
     if(input$dropdown_individual == "all") {
@@ -376,7 +380,10 @@ shinyModule <- function(input, output, session, data) {
 
     # join avg and var movement
     movement_summary <- movement_summary %>% left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
-    movement_summary_columns <- c(colnames(movement_summary), "avg. measures", "var. measures")
+    colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
+
+    # TODO: convert column to numeric
+    # apply(movement_summary, 2, as.numeric)
 
     movement_summary
     
@@ -385,5 +392,5 @@ shinyModule <- function(input, output, session, data) {
   output$movement_summary <- DT::renderDataTable({ DT::datatable(rctv_movement_summary()) })
   
   return(rctv_data)
-  
-}
+
+ }
