@@ -20,7 +20,7 @@ library(RColorBrewer)
 library(dplyr)
 
 qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
-col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col_vector = tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
 
 ####################
 # user interface
@@ -290,8 +290,8 @@ shinyModule <- function(input, output, session, data) {
       selected_id <- which(individual_names_original %in% input$dropdown_individual)
     }
     
-    this_line_opacity = 0.9
-    this_line_weight  = 3
+    this_line_opacity = 0.8
+    this_line_weight  = 2
 
     # create map with lines for each individual
     map <- leaflet() %>% 
