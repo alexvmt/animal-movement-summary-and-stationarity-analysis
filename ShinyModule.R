@@ -312,7 +312,7 @@ shinyModule <- function(input, output, session, data) {
 
       map <- map %>% 
         addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
-        addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
+        addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label= ~timestamps, clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,  #addCircleMarkers
                          lat = last_lat,
                          label = paste0("time: ", last_time)
