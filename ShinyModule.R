@@ -20,8 +20,8 @@ library(RColorBrewer)
 library(dplyr)
 
 # set map colors
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == "qual", ]
-col_vector = tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
+qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
+col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
 
 
 
@@ -35,7 +35,7 @@ shinyModuleUserInterface <- function(id, label) {
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
-      column(3,
+      column(2,
              selectInput(ns("dropdown_individual"),
                          "Individual:",
                          choices = c("all")),
@@ -51,11 +51,11 @@ shinyModuleUserInterface <- function(id, label) {
                                         "all time" = 99999),
                          selected = c("last 180 days" = 180)),
              actionButton(ns("about_button"), "Show app info")),
-      column(9, DT::dataTableOutput(ns("movement_summary")))
+      column(10, DT::dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
-      column(3),
-      column(5, leafletOutput(ns("map"))),
+      column(2),
+      column(6, leafletOutput(ns("map"))),
       column(4, plotlyOutput(ns("time_series")))
     )
   )
@@ -157,7 +157,7 @@ shinyModule <- function(input, output, session, data) {
       min_date <- max_date - last_n_days
       
       # filter data based on date range
-      individual_data <- individual_data[(individual_data$date >= min_date) & (individual_data$date <= max_date), ]
+      individual_data <- individual_data[(individual_data$date > min_date) & (individual_data$date <= max_date), ]
       
       # append processed data to existing dataframe
       processed_data <- rbind(processed_data, individual_data)
@@ -211,7 +211,8 @@ shinyModule <- function(input, output, session, data) {
    data_aggregated <- rctv_processed_data() %>% 
 	   		filter(!is.na(distance_meters)) %>% 
 	   		group_by(date, tag.local.identifier) %>% 
-	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE), measures_per_date = n())
+	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
+	   		          measures_per_date = n())
 
     data_aggregated
     
@@ -359,7 +360,7 @@ shinyModule <- function(input, output, session, data) {
 				              var_measures = round(var(measures_per_date), 1))
     
     # create empty dataframe to store movement summary
-    movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance (m)", "avg. distance (m)")
+    movement_summary_columns <- c("individual", "start date", "end date", "#days w measures", "#days w/o measures", "today below avg.", "total distance (m)", "avg. distance (m)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -376,12 +377,15 @@ shinyModule <- function(input, output, session, data) {
       # calculate today below average
       avg_distance <- mean(individual_data_aggregated$distance_meters)
       sd_distance <- sd(individual_data_aggregated$distance_meters)
+      min_date <- min(individual_data_aggregated$date)
       max_date <- max(individual_data_aggregated$date)
       meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
 
       # store values
       individual_movement_summary <- c(individual,
+                                       as.character(min_date),
+                                       as.character(max_date),
                                        dim(individual_data_aggregated)[1],
                                        missing_days,
                                        below_today,
@@ -398,8 +402,9 @@ shinyModule <- function(input, output, session, data) {
       left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
 
-    # convert column to numeric
-    movement_summary[, -1] <- apply(movement_summary[, -1], 2, as.numeric)
+    # convert relevant columns to numeric
+    movement_summary[, 4:5] <- apply(movement_summary[, 4:5], 2, as.numeric)
+    movement_summary[, 7:10] <- apply(movement_summary[, 7:10], 2, as.numeric)
 
     movement_summary
     
