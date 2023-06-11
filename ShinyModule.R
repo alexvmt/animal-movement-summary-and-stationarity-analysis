@@ -19,8 +19,11 @@ library(DT)
 library(RColorBrewer)
 library(dplyr)
 
-qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+# set map colors
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == "qual", ]
 col_vector = tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
+
+
 
 ####################
 # user interface
@@ -46,23 +49,12 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
-                         selected = c("last 180 days" = 180))),
+                         selected = c("last 180 days" = 180)),
+             actionButton(ns("about_button"), "Show app info")),
       column(9, DT::dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
-      column(3,
-             # empty for now
-             helpText(
-"This app helps to find stationarity in animal movement and to explore animal tracking data.
-Three components: a movement summary table, a map with animal tracks (and last coordinates) and a time series plot help to analyze a given dataset.
-The date range filter applies to all individuals in a given dataset and all three components in the app.
-Selecting an individual will not affect the movement summary table.
-Only the map and time series plot will be filtered.
-Data is aggregated on a daily granularity and distances are calculated in meters.
-A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
-Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-A date range always refers to the last n days of each given animal tracking series."
-	     )),
+      column(3),
       column(5, leafletOutput(ns("map"))),
       column(4, plotlyOutput(ns("time_series")))
     )
@@ -76,6 +68,22 @@ A date range always refers to the last n days of each given animal tracking seri
 ####################
 
 shinyModule <- function(input, output, session, data) {
+  
+  # show app info when about button is clicked
+  observeEvent(input$about_button, {
+    showModal(modalDialog(
+      title = "About this app",
+      "This app helps find stationarity in animal movement and explore animal tracking data.
+      Three components: (i) a movement summary table, (ii) a map with animal tracks (and last coordinates) and (iii) a time series plot help analyze a given dataset.
+      The date range filter applies to all individuals in a given dataset and all three components in the app.
+      Selecting an individual will not affect the movement summary table.
+      Only the map and time series plot will be filtered.
+      Data is aggregated by day and distances are calculated in meters.
+      A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
+      Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
+      A date range always refers to the last n days of each given animal tracking series."
+    ))
+  })
   
   # make loaded data reactive
   rctv_data <- reactive({ data })
@@ -200,12 +208,10 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_aggregated <- reactive({
     
     # aggregate distances by time interval and individual
-   data_aggregated <- rctv_processed_data() %>%
-	   		filter(!is.na(distance_meters)) %>%
-	   		group_by(date, tag.local.identifier) %>%
-	   		summarise(distance_meters = sum(distance_meters, na.rm=TRUE),
-				  measures_per_date = n() 
-			)
+   data_aggregated <- rctv_processed_data() %>% 
+	   		filter(!is.na(distance_meters)) %>% 
+	   		group_by(date, tag.local.identifier) %>% 
+	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE), measures_per_date = n())
 
     data_aggregated
     
@@ -231,9 +237,10 @@ shinyModule <- function(input, output, session, data) {
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
 
-    # generate sequence of dates, and fill missing dates with zero
+    # generate sequence of dates and fill missing dates with zero
     date_seq <- data.frame(date = seq(start_date, end_date, by = "day"))
-    data_to_plot <- date_seq %>% left_join(data_to_plot)
+    data_to_plot <- date_seq %>% 
+      left_join(data_to_plot)
     data_to_plot[is.na(data_to_plot)] <- 0
 
     # set date scale
@@ -261,8 +268,6 @@ shinyModule <- function(input, output, session, data) {
     
     # store individual names and colors
     individual_names_original <- unique(processed_data$tag.local.identifier)
-    #individual_colors <- brewer.pal(length(individual_names_original), "Dark2")
-   
     individual_colors <- col_vector[1:length(individual_names_original)]
 
     # filter for individual
@@ -299,11 +304,14 @@ shinyModule <- function(input, output, session, data) {
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
-      for (i in seq(along = head(individual_names, n=10))) {
+
+      for (i in seq(along = head(individual_names, n = 10))) {
+
         map <- map %>% 
           addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
       }
+      
     } else {
       
       last_lon  <- tail(processed_data_filtered, 1)$location.long
@@ -313,10 +321,10 @@ shinyModule <- function(input, output, session, data) {
       map <- map %>% 
         addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
         addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label= ~timestamps, clusterOptions = markerClusterOptions()) %>% 
-        addMarkers(lng = last_lon,  #addCircleMarkers
-                         lat = last_lat,
-                         label = paste0("Last location at: ", last_time)
-			 )
+        addMarkers(lng = last_lon,
+                   lat = last_lat,
+                   label = paste0("Last location at: ", last_time))
+
     }
     
     if(input$dropdown_individual == "all") {
@@ -344,12 +352,11 @@ shinyModule <- function(input, output, session, data) {
     # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
 
-    # calculate average measuers per day and variance
+    # calculate average measures per day and variance
     measures_aggregated <- data_aggregated %>% 
 				    group_by(tag.local.identifier) %>% 
-				    summarise(avg_measures = round(mean(measures_per_date),1),
-				    	      var_measures = round(var(measures_per_date),1)
-				    )
+				    summarise(avg_measures = round(mean(measures_per_date), 1),
+				              var_measures = round(var(measures_per_date), 1))
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual", "#observations", "#days w/o observations", "today below avg.", "total distance (m)", "avg. distance (m)")
@@ -379,8 +386,7 @@ shinyModule <- function(input, output, session, data) {
                                        missing_days,
                                        below_today,
                                        round(sum(individual_data_aggregated$distance_meters), 0),
-                                       round(avg_distance, 0)
-      )
+                                       round(avg_distance, 0))
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
@@ -388,11 +394,12 @@ shinyModule <- function(input, output, session, data) {
     }
 
     # join avg and var movement
-    movement_summary <- movement_summary %>% left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
+    movement_summary <- movement_summary %>% 
+      left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
 
     # convert column to numeric
-    movement_summary[,-1] <-  apply(movement_summary[,-1], 2, as.numeric)
+    movement_summary[, -1] <- apply(movement_summary[, -1], 2, as.numeric)
 
     movement_summary
     
