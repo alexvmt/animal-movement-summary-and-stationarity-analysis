@@ -18,6 +18,7 @@ library(plotly)
 library(DT)
 library(RColorBrewer)
 library(dplyr)
+library(shinybusy)
 
 # set map colors
 qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
@@ -103,6 +104,9 @@ shinyModule <- function(input, output, session, data) {
   
   ##### process loaded data
   rctv_processed_data <- reactive({
+    
+    # show modal while processing data
+    show_modal_spinner()
     
     # transform move object to dataframe
     data_df <- as.data.frame(data)
@@ -195,6 +199,10 @@ shinyModule <- function(input, output, session, data) {
                                              lon_b = processed_data$location.long.lag,
                                              lat_b = processed_data$location.lat.lag,
                                              FUN = calculate_distance_in_meters_between_coordinates)
+    
+    # remove modal after completing processing data and notify user
+    remove_modal_spinner()
+    notify_success("Data processing complete.")
     
     rctv_processed_data <- processed_data
     
