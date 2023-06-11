@@ -91,13 +91,21 @@ shinyModule <- function(input, output, session, data) {
   
   # generate inputs for dropdowns
   observe({
+    
+    # show modal during data loading
+    showModal(modalDialog("Loading data...", footer = NULL))
+    
     # wait until the data is loaded
     if (is.null(data)) return()
     data_df <- as.data.frame(data)
     keys <- c(sort(as.character(data_df$tag.local.identifier)), "all")
     values <- c(sort(as.character(data_df$tag.local.identifier)), "all")
     key_value_list <- setNames(values, keys)
-    updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all")) 
+    updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all"))
+    
+    # remove modal after data loading
+    removeModal()
+    
   })
   
   
@@ -105,8 +113,8 @@ shinyModule <- function(input, output, session, data) {
   ##### process loaded data
   rctv_processed_data <- reactive({
     
-    # show modal while processing data
-    show_modal_spinner()
+    # show modal during data processing
+    show_modal_spinner(text = "Processing data. Please wait.")
     
     # transform move object to dataframe
     data_df <- as.data.frame(data)
@@ -200,7 +208,7 @@ shinyModule <- function(input, output, session, data) {
                                              lat_b = processed_data$location.lat.lag,
                                              FUN = calculate_distance_in_meters_between_coordinates)
     
-    # remove modal after completing processing data and notify user
+    # remove modal after data processing and notify user
     remove_modal_spinner()
     notify_success("Data processing complete.")
     
