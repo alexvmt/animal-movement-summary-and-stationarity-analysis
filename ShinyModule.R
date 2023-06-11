@@ -230,9 +230,10 @@ shinyModule <- function(input, output, session, data) {
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
 
-    # generate sequence of dates, and fill missing dates with zero
+    # generate sequence of dates and fill missing dates with zero
     date_seq <- data.frame(date = seq(start_date, end_date, by = "day"))
-    data_to_plot <- date_seq %>% left_join(data_to_plot)
+    data_to_plot <- date_seq %>% 
+      left_join(data_to_plot)
     data_to_plot[is.na(data_to_plot)] <- 0
 
     # set date scale
@@ -296,11 +297,13 @@ shinyModule <- function(input, output, session, data) {
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
+      
       for (i in seq(along = individual_names)) {
         map <- map %>% 
           addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
       }
+      
     } else {
       
       last_lon  <- tail(processed_data_filtered, 1)$location.long
@@ -312,8 +315,8 @@ shinyModule <- function(input, output, session, data) {
         addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
-                   label = paste0("time: ", last_time)
-			 )
+                   label = paste0("time: ", last_time))
+      
     }
     
     if(input$dropdown_individual == "all") {
