@@ -49,21 +49,12 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 180 days" = 180,
                                         "last year" = 365,
                                         "all time" = 99999),
-                         selected = c("last 180 days" = 180))),
+                         selected = c("last 180 days" = 180)),
+             actionButton(ns("about_button"), "Show app info")),
       column(9, DT::dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
-      column(3,
-             helpText("This app helps find stationarity in animal movement and explore animal tracking data.
-             Three components: (i) a movement summary table, (ii) a map with animal tracks (and last coordinates) and (iii) a time series plot help analyze a given dataset.
-             The date range filter applies to all individuals in a given dataset and all three components in the app.
-             Selecting an individual will not affect the movement summary table.
-             Only the map and time series plot will be filtered.
-             Data is aggregated by day and distances are calculated in meters.
-             A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
-             Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-             A date range always refers to the last n days of each given animal tracking series.")
-             ),
+      column(3),
       column(5, leafletOutput(ns("map"))),
       column(4, plotlyOutput(ns("time_series")))
     )
@@ -77,6 +68,22 @@ shinyModuleUserInterface <- function(id, label) {
 ####################
 
 shinyModule <- function(input, output, session, data) {
+  
+  # show app info when about button is clicked
+  observeEvent(input$about_button, {
+    showModal(modalDialog(
+      title = "About this app",
+      "This app helps find stationarity in animal movement and explore animal tracking data.
+      Three components: (i) a movement summary table, (ii) a map with animal tracks (and last coordinates) and (iii) a time series plot help analyze a given dataset.
+      The date range filter applies to all individuals in a given dataset and all three components in the app.
+      Selecting an individual will not affect the movement summary table.
+      Only the map and time series plot will be filtered.
+      Data is aggregated by day and distances are calculated in meters.
+      A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
+      Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
+      A date range always refers to the last n days of each given animal tracking series."
+    ))
+  })
   
   # make loaded data reactive
   rctv_data <- reactive({ data })
