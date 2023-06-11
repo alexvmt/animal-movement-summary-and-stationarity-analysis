@@ -304,8 +304,9 @@ shinyModule <- function(input, output, session, data) {
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
-      
-      for (i in seq(along = individual_names)) {
+
+      for (i in seq(along = head(individual_names, n = 10))) {
+
         map <- map %>% 
           addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
@@ -319,11 +320,11 @@ shinyModule <- function(input, output, session, data) {
 
       map <- map %>% 
         addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
-        addCircles(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, group = individual_names_original[selected_id]) %>% 
+        addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label= ~timestamps, clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
-                   label = paste0("time: ", last_time))
-      
+                   label = paste0("Last location at: ", last_time))
+
     }
     
     if(input$dropdown_individual == "all") {
@@ -396,6 +397,9 @@ shinyModule <- function(input, output, session, data) {
     movement_summary <- movement_summary %>% 
       left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
+
+    # convert column to numeric
+    movement_summary[, -1] <- apply(movement_summary[, -1], 2, as.numeric)
 
     movement_summary
     
