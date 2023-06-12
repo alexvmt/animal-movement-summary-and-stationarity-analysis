@@ -51,6 +51,7 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last year" = 365,
                                         "all time" = 99999),
                          selected = c("last 180 days" = 180)),
+	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
              actionButton(ns("about_button"), "Show app info")),
       column(10, DT::dataTableOutput(ns("movement_summary")))
     ),
@@ -315,6 +316,14 @@ shinyModule <- function(input, output, session, data) {
     this_line_opacity = 0.8
     this_line_weight  = 2
 
+    # limit if needed the number of shown tracks on the map
+    # remove the legend in case of more than 10 tracks
+    track_limit = length(individual_names) 
+    fixed_track_limit = 10 
+    if(input$checkbox_full_map){
+	track_limit <- fixed_track_limit
+    }
+
     # create map with lines for each individual
     map <- leaflet() %>% 
       addTiles() 
@@ -322,7 +331,7 @@ shinyModule <- function(input, output, session, data) {
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
 
-      for (i in seq(along = head(individual_names, n = 10))) {
+      for (i in seq(along = head(individual_names, n = track_limit))) {
 
         map <- map %>% 
           addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
@@ -348,9 +357,12 @@ shinyModule <- function(input, output, session, data) {
       selected_id <- 1:length(individual_colors)
     }
 
-    map  <- map %>% 
-      addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
-    
+    # don't show the legend if the map is showing more than 10 tracks
+    if(track_limit <= fixed_track_limit ){    
+      map  <- map %>% 
+         addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
+    }
+
     map
     
   })
