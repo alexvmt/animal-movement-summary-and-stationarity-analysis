@@ -79,7 +79,8 @@ shinyModule <- function(input, output, session, data) {
       Data is aggregated by day and distances are calculated in meters.
       A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
       Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-      A date range always refers to the last n days of each given animal tracking series."
+      A date range always refers to the last n days of each given animal tracking series.
+      Please note that due to somewhat heavy data processing the app performs best with rather small datasets, containing not too many individuals."
     ))
   })
   
