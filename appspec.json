@@ -3,11 +3,40 @@
   "dependencies": {
     "R": [
       {
-        "name": "lubridate",
-        "version": "1.7.10"
+        "name": "leaflet"
+      },
+      {
+        "name": "leaflet.extras"
       },
       {
         "name": "move"
+      },
+      {
+        "name": "sp"
+      },
+      {
+        "name": "pals"
+      },
+      {
+        "name": "mapview"
+      },
+      {
+        "name": "geosphere"
+      },
+      {
+        "name": "plotly"
+      },
+      {
+        "name": "DT"
+      },
+      {
+        "name": "RColorBrewer"
+      },
+      {
+        "name": "dplyr"
+      },
+      {
+        "name": "shinybusy"
       }
     ]
   },
@@ -22,10 +51,23 @@
   ],
   "people": [
     {
-      "firstName": "Charles",
+      "firstName": "Matthias",
       "middleInitials": null,
-      "lastName": "Darwin",
-      "email": "creator@example.com",
+      "lastName": "Böck",
+      "email": "matthias.boeck@gmail.com",
+      "roles": [
+        "author",
+        "creator"
+      ],
+      "orcid": null,
+      "affiliation": null,
+      "affiliationRor": null
+    },
+    {
+      "firstName": "Alexander",
+      "middleInitials": null,
+      "lastName": "Merdian-Tarko",
+      "email": "alexander.merdian-tarko@posteo.de",
       "roles": [
         "author",
         "creator"
@@ -35,21 +77,10 @@
       "affiliationRor": null
     }
   ],
-  "funding": [
-    {
-      "name": "funder name",
-      "comment": "grant for App"
-    }
-  ],
-  "references": [
-    {
-      "type": "IsDescribedBy",
-      "note": "Darwin, C. 1900. The creation. Journal XY. 1-2",
-      "url": "https://anylink.xyz"
-    }
-  ],
+  "funding": [],
+  "references": [],
   "documentation": {
-    "url": "https://github.com/yourAccount/Name-of-App/.../README.md"
+    "url": "https://github.com/alexvmt/animal-movement-summary-and-stationarity-analysis/blob/master/README.md"
   }
 }
 
