@@ -313,20 +313,20 @@ shinyModule <- function(input, output, session, data) {
       selected_id <- which(individual_names_original %in% input$dropdown_individual)
     }
     
-    this_line_opacity = 0.8
-    this_line_weight  = 2
+    this_line_opacity <- 0.8
+    this_line_weight  <- 2
 
     # limit if needed the number of shown tracks on the map
     # remove the legend in case of more than 10 tracks
-    track_limit = length(individual_names) 
-    fixed_track_limit = 10 
-    if(input$checkbox_full_map){
-	track_limit <- fixed_track_limit
+    track_limit <- length(individual_names)
+    fixed_track_limit <- 10
+    if(input$checkbox_full_map) {
+      track_limit <- fixed_track_limit
     }
 
     # create map with lines for each individual
     map <- leaflet() %>% 
-      addTiles() 
+      addTiles()
     
     # check if only one element is in the selected set
     if(length(individual_names) > 1) {
@@ -334,19 +334,20 @@ shinyModule <- function(input, output, session, data) {
       for (i in seq(along = head(individual_names, n = track_limit))) {
 
         map <- map %>% 
-          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity,  group = individual_names[i], weight = this_line_weight) %>% 
+          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = individual_names[i], weight = this_line_weight) %>% 
           addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
+      
       }
       
     } else {
       
-      last_lon  <- tail(processed_data_filtered, 1)$location.long
-      last_lat  <- tail(processed_data_filtered, 1)$location.lat
+      last_lon <- tail(processed_data_filtered, 1)$location.long
+      last_lat <- tail(processed_data_filtered, 1)$location.lat
       last_time <- tail(processed_data_filtered, 1)$timestamps 
 
       map <- map %>% 
-        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity,  group = individual_names_original[selected_id], weight = this_line_weight) %>% 
-        addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label= ~timestamps, clusterOptions = markerClusterOptions()) %>% 
+        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individual_names_original[selected_id], weight = this_line_weight) %>% 
+        addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label = ~timestamps, clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
                    label = paste0("Last location at: ", last_time))
@@ -358,16 +359,17 @@ shinyModule <- function(input, output, session, data) {
     }
 
     # don't show the legend if the map is showing more than 10 tracks
-    if(track_limit <= fixed_track_limit ){    
+    if(track_limit <= fixed_track_limit) {
+      
       map  <- map %>% 
-         addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
+        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
+    
     }
 
     map
     
   })
  
-
   output$map <- renderLeaflet({ map() })
   
   
