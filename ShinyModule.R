@@ -10,10 +10,6 @@ library(sp)
 library(pals)
 library(mapview)
 library(geosphere)
-library(ggplot2)
-library(magrittr)
-library(htmlwidgets)
-library(htmltools)
 library(plotly)
 library(DT)
 library(RColorBrewer)
@@ -53,7 +49,7 @@ shinyModuleUserInterface <- function(id, label) {
                          selected = c("last 180 days" = 180)),
 	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
              actionButton(ns("about_button"), "Show app info")),
-      column(10, DT::dataTableOutput(ns("movement_summary")))
+      column(10, dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
       column(2),
@@ -343,7 +339,7 @@ shinyModule <- function(input, output, session, data) {
       
       last_lon <- tail(processed_data_filtered, 1)$location.long
       last_lat <- tail(processed_data_filtered, 1)$location.lat
-      last_time <- tail(processed_data_filtered, 1)$timestamps 
+      last_time <- tail(processed_data_filtered, 1)$timestamps
 
       map <- map %>% 
         addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individual_names_original[selected_id], weight = this_line_weight) %>% 
@@ -440,7 +436,7 @@ shinyModule <- function(input, output, session, data) {
     
   })
   
-  output$movement_summary <- DT::renderDataTable({ DT::datatable(rctv_movement_summary()) })
+  output$movement_summary <- renderDataTable({ datatable(rctv_movement_summary()) })
   
   return(rctv_data)
 
