@@ -3,6 +3,9 @@
   "dependencies": {
     "R": [
       {
+        "name": "shiny"
+      },
+	  {
         "name": "leaflet"
       },
       {
