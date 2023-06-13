@@ -3,6 +3,7 @@
 ####################
 
 # load packages
+library(shiny)
 library(leaflet)
 library(leaflet.extras)
 library(move)
