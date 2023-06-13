@@ -63,7 +63,7 @@ This exemplary workflow might be helpful to spot unusual animal behavior.
 MoveStack in Movebank format
 
 ### Output data
-Shiny user interface (UI)
+moveStack
 
 ### Artefacts
 None.
