@@ -77,7 +77,8 @@ shinyModule <- function(input, output, session, data) {
       A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
       Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
       A date range always refers to the last n days of each given animal tracking series.
-      Please note that due to somewhat heavy data processing the app performs best with rather small datasets, containing not too many individuals."
+      Please note that due to somewhat heavy data processing the app performs best with rather small datasets, containing not too many individuals.
+      If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order)."
     ))
   })
   
@@ -283,7 +284,7 @@ shinyModule <- function(input, output, session, data) {
     col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
     
     # store individual names and colors
-    individual_names_original <- unique(processed_data$tag.local.identifier)
+    individual_names_original <- order(unique(processed_data$tag.local.identifier))
     individual_colors <- col_vector[1:length(individual_names_original)]
 
     # filter for individual
@@ -304,7 +305,7 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # get remaining individuals
-    individual_names <- unique(processed_data_filtered$tag.local.identifier)
+    individual_names <- order(unique(processed_data_filtered$tag.local.identifier))
     if (length(individual_names_original) == 1) {
       selected_id <- 1
     } else {

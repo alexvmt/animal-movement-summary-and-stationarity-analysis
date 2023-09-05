@@ -40,6 +40,7 @@ b) Tracker map
 Show the movement of all animals or a single animal and their/its last coordinates on a map.
 Identify different behavior patterns for different date ranges and differences between animals.
 Both date range and individual filters influence this view.
+If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order).
 
 c) Time series plot
 Shows per default the time series for the first individual in the dataset.
