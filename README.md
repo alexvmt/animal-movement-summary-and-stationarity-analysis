@@ -29,12 +29,13 @@ c) Time series plot: showing moved distance from one day to another for a single
 
 a) Statistics table
 This sortable table (only one column can be used for this) shows the following stats for each individual for the selected date range (the individual filter does not influence the table):
-- number of observations
-- days without observations (Are there fewer observations than days in the selected date range?)
-- was today's total movement below the 1.5x standard deviation of the current date range
-- total distance moved (in meters)
-- average distance moved (in meters)
-- average and variance of measurements per day
+- #days w measures: number of days with measures
+- #days w/o measures: number of days without measures (Are there fewer observations than days in the selected date range?)
+- today below avg.: was today's (more general: the last day with an observation) total movement below the 1.5x standard deviation of the current date range
+- total distance (m): total distance moved in the selected date range (in meters)
+- avg. distance (m): average distance moved per day in the selected date trange (in meters)
+- avg. measures: average number of measurements per day in the selected date range
+- var. measures: variance of number of measurements per day in the selected date range
 
 b) Tracker map
 Show the movement of all animals or a single animal and their/its last coordinates on a map.
