@@ -73,7 +73,7 @@ shinyModule <- function(input, output, session, data) {
       The date range filter applies to all individuals in a given dataset and all three components in the app.
       Selecting an individual will not affect the movement summary table.
       Only the map and time series plot will be filtered.
-      Data is aggregated by day and distances are calculated in meters.
+      Data is aggregated by day and distances are calculated in meters (using Haversine great circle distance).
       A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
       Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
       A date range always refers to the last n days of each given animal tracking series.

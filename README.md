@@ -19,7 +19,7 @@ The filter is always cutting off the last n days of each given track.
 The processing itself contains the following steps:
 - drop rows with missing or duplicated values
 - filter on given date range and potentially individual
-- calculate distance between coordinates in meters
+- calculate distance between coordinates in meters (using Haversine great circle distance)
 - aggregate data per day (not used for the map, only for the time series plot)
 
 The analysis consists of three components:
