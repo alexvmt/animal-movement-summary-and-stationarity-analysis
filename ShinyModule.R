@@ -223,7 +223,7 @@ shinyModule <- function(input, output, session, data) {
    data_aggregated <- rctv_processed_data() %>% 
 	   		filter(!is.na(distance_meters)) %>% 
 	   		group_by(date, tag.local.identifier) %>% 
-	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
+	   		summarise(daily_distance_meters = sum(distance_meters, na.rm = TRUE),
 	   		          measures_per_date = n())
 
     data_aggregated
@@ -264,7 +264,7 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # plot time series for selected individual
-    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
+    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~daily_distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
       layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
     
     p
@@ -404,11 +404,11 @@ shinyModule <- function(input, output, session, data) {
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
       # calculate today below average
-      avg_distance <- mean(individual_data_aggregated$distance_meters)
-      sd_distance <- sd(individual_data_aggregated$distance_meters)
+      avg_distance <- mean(individual_data_aggregated$daily_distance_meters)
+      sd_distance <- sd(individual_data_aggregated$daily_distance_meters)
       min_date <- min(individual_data_aggregated$date)
       max_date <- max(individual_data_aggregated$date)
-      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
+      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
       below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
 
       # store values
@@ -418,7 +418,7 @@ shinyModule <- function(input, output, session, data) {
                                        dim(individual_data_aggregated)[1],
                                        missing_days,
                                        below_today,
-                                       round(sum(individual_data_aggregated$distance_meters), 0),
+                                       round(sum(individual_data_aggregated$daily_distance_meters), 0),
                                        round(avg_distance, 0))
       
       # append individual movement summary to existing dataframe
