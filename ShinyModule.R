@@ -68,17 +68,31 @@ shinyModule <- function(input, output, session, data) {
   observeEvent(input$about_button, {
     showModal(modalDialog(
       title = "About this app",
-      "This app helps find stationarity in animal movement and explore animal tracking data.
-      Three components: (i) a movement summary table, (ii) a map with animal tracks (and last coordinates) and (iii) a time series plot help analyze a given dataset.
-      The date range filter applies to all individuals in a given dataset and all three components in the app.
-      Selecting an individual will not affect the movement summary table.
-      Only the map and time series plot will be filtered.
-      Data is aggregated by day and distances are calculated in meters (using Haversine great circle distance).
-      A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
-      Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-      A date range always refers to the last n days of each given animal tracking series.
-      Please note that due to somewhat heavy data processing the app performs best with rather small datasets, containing not too many individuals.
-      If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order)."
+      HTML(
+        "This app helps find stationarity in animal movement mainly through a visual analysis of animal tracking data.<br><br>
+        
+        It consists of three components:
+        <li>statistical movement summary table</li>
+        <li>map with animal tracks (and last coordinates)</li>
+        <li>time series plot to help visually spot anomalous movement patterns</li><br>
+        
+        <b>Filters:</b>
+        <li>The date range filter applies to all individuals in a given dataset and all three components in the app.
+        The data processing loop and distance calculations are executed again if the date range filter is changed, which may take a moment.</li>
+        <li>Selecting an individual will not affect the movement summary table.
+        Only the map and time series plot will be filtered.</li>
+        <li>Data is aggregated by day and distances are calculated in meters (using Haversine great circle distance).</li><br>
+        
+        <b>Potential workflow:</b><br>
+        A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
+        Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
+        A date range always refers to the last n days of each given animal's tracking data time series.<br><br>
+        
+        <b>Notes:</b>
+        <li>Please note that the app performs best with rather small datasets, containing not too many individuals.
+        This is mainly because calculating distances between coordinates is computationaly intense when there are many measurements (e. g. every 5 minutes).</li>
+        <li>If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order).</li>"
+      )
     ))
   })
   
