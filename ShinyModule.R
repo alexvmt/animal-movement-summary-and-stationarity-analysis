@@ -284,7 +284,7 @@ shinyModule <- function(input, output, session, data) {
     col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
     
     # store individual names and colors
-    individual_names_original <- order(unique(processed_data$tag.local.identifier))
+    individual_names_original <- sort(unique(processed_data$tag.local.identifier))
     individual_colors <- col_vector[1:length(individual_names_original)]
 
     # filter for individual
@@ -305,7 +305,7 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # get remaining individuals
-    individual_names <- order(unique(processed_data_filtered$tag.local.identifier))
+    individual_names <- sort(unique(processed_data_filtered$tag.local.identifier))
     if (length(individual_names_original) == 1) {
       selected_id <- 1
     } else {
