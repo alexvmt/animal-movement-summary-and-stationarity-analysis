@@ -81,8 +81,8 @@ shinyModule <- function(input, output, session, data) {
     ))
   })
   
-  # make loaded data reactive
-  rctv_data <- reactive({ data })
+  # make input data reactive so that it can be returned later if unmodified
+  current <- reactiveVal(data)
   
   # generate inputs for dropdowns
   observe({
@@ -440,6 +440,7 @@ shinyModule <- function(input, output, session, data) {
   
   output$movement_summary <- renderDataTable({ datatable(rctv_movement_summary()) })
   
-  return(rctv_data)
+  # return unmodified input data
+  return(reactive({ current() }))
 
  }
