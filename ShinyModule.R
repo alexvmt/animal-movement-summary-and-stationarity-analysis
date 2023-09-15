@@ -279,7 +279,7 @@ shinyModule <- function(input, output, session, data) {
     
     # plot time series for selected individual
     p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~daily_distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
-      layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
+      layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1), title = "Do the last distances moved look anomalous to you?")
     
     p
     
