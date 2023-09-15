@@ -41,8 +41,7 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 60 days" = 60,
                                         "last 90 days" = 90,
                                         "last 180 days" = 180,
-                                        "last year" = 365,
-                                        "all time" = 99999),
+                                        "last year" = 365),
                          selected = c("last 180 days" = 180)),
 	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
              actionButton(ns("about_button"), "Show app info")),
@@ -109,7 +108,7 @@ shinyModule <- function(input, output, session, data) {
   rctv_processed_data <- reactive({
     
     # show modal during data processing
-    show_modal_spinner(text = "Processing data. Please wait.")
+    show_modal_spinner(text = "Processing data. Calculating distances. This may take a moment. Please wait.")
     
     # transform move object to dataframe
     data_df <- as.data.frame(data)
@@ -141,11 +140,11 @@ shinyModule <- function(input, output, session, data) {
     processed_data_columns <- c("tag.local.identifier", "timestamps", "location.long", "location.lat", "date")
     colnames(processed_data) <- processed_data_columns
     
-    # select time window
-    last_n_days <- as.numeric(input$dropdown_date_range)
+    # set max number of last days to process
+    last_n_days <- 360
     
     # process last n days of observations per individual
-    for(individual in individuals) {
+    for (individual in individuals) {
       
       # filter data based on individual
       individual_data <- data_df[data_df$tag.local.identifier == individual, ]
@@ -207,24 +206,51 @@ shinyModule <- function(input, output, session, data) {
     remove_modal_spinner()
     notify_success("Data processing complete.")
     
-    rctv_processed_data <- processed_data
+    # drop rows with missing distances
+    processed_data <- processed_data %>% 
+      filter(!is.na(distance_meters))
     
-    rctv_processed_data
+    processed_data
     
   })
   
   
   
-  ##### aggregate processed data
+  ##### get max dates
+  rctv_max_dates <- reactive({
+    
+    # load reactive data
+    processed_data <- rctv_processed_data()
+    
+    # get max date per individual
+    max_dates <- processed_data %>% 
+      group_by(tag.local.identifier) %>% 
+      summarise(max_date = max(date))
+    
+    max_dates
+    
+  })
+  
+  
+  
+  ##### filter and aggregate processed data
   rctv_data_aggregated <- reactive({
     
-    # aggregate distances by time interval and individual
-   data_aggregated <- rctv_processed_data() %>% 
-	   		filter(!is.na(distance_meters)) %>% 
-	   		group_by(date, tag.local.identifier) %>% 
-	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
-	   		          measures_per_date = n())
-
+    # load reactive data
+    processed_data <- rctv_processed_data()
+    max_dates <- rctv_max_dates()
+    
+    # set last n days
+    last_n_days <- as.numeric(input$dropdown_date_range)
+    
+    # aggregate distances by date and individual
+    data_aggregated <- processed_data %>% 
+      left_join(max_dates, by = "tag.local.identifier") %>% 
+      filter(date >= max_date - last_n_days) %>% 
+      group_by(date, tag.local.identifier) %>% 
+      summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
+                measures_per_date = n())
+    
     data_aggregated
     
   })
@@ -238,7 +264,7 @@ shinyModule <- function(input, output, session, data) {
     data_aggregated <- rctv_data_aggregated()
     
     # select individual to plot data for
-    if(input$dropdown_individual == "all") {
+    if (input$dropdown_individual == "all") {
       individual <- data_aggregated$tag.local.identifier[1]
     } else {
       individual <- input$dropdown_individual
@@ -287,7 +313,7 @@ shinyModule <- function(input, output, session, data) {
     individual_colors <- col_vector[1:length(individual_names_original)]
 
     # filter for individual
-    if(input$dropdown_individual == "all") {
+    if (input$dropdown_individual == "all") {
       # do nothing and proceed
     } else {
       processed_data <- processed_data[processed_data$tag.local.identifier == input$dropdown_individual, ]
@@ -295,7 +321,7 @@ shinyModule <- function(input, output, session, data) {
     
     # filter for date range
     processed_data_filtered <- NULL
-    for(this_tag in unique(processed_data$tag.local.identifier)) {
+    for (this_tag in unique(processed_data$tag.local.identifier)) {
       individual_processed_data <- processed_data[processed_data$tag.local.identifier == this_tag, ]
       temp_dates <- as.Date(individual_processed_data$timestamps)
       max_temp_dates <- max(temp_dates)
@@ -312,13 +338,13 @@ shinyModule <- function(input, output, session, data) {
     }
     
     this_line_opacity <- 0.8
-    this_line_weight  <- 2
+    this_line_weight <- 2
 
-    # limit if needed the number of shown tracks on the map
+    # limit the number of shown tracks on the map if needed
     # remove the legend in case of more than 10 tracks
     track_limit <- length(individual_names)
     fixed_track_limit <- 10
-    if(input$checkbox_full_map) {
+    if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
     }
 
@@ -327,7 +353,7 @@ shinyModule <- function(input, output, session, data) {
       addTiles()
     
     # check if only one element is in the selected set
-    if(length(individual_names) > 1) {
+    if (length(individual_names) > 1) {
 
       for (i in seq(along = head(individual_names, n = track_limit))) {
 
@@ -352,14 +378,14 @@ shinyModule <- function(input, output, session, data) {
 
     }
     
-    if(input$dropdown_individual == "all") {
+    if (input$dropdown_individual == "all") {
       selected_id <- 1:length(individual_colors)
     }
 
-    # don't show the legend if the map is showing more than 10 tracks
-    if(track_limit <= fixed_track_limit) {
+    # don't show legend if map is showing more than 10 tracks
+    if (track_limit <= fixed_track_limit) {
       
-      map  <- map %>% 
+      map <- map %>% 
         addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
     
     }
@@ -393,16 +419,16 @@ shinyModule <- function(input, output, session, data) {
     colnames(movement_summary) <- movement_summary_columns
     
     # compute movement summary for last n days per individual
-    for(individual in individuals) {
+    for (individual in individuals) {
       
       # filter data based on individual
       individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
-      # calculate missing days (account for all set to 99999)
+      # calculate number of missing days
       missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
-      # calculate today below average
+      # check whether last distance is below average
       avg_distance <- mean(individual_data_aggregated$distance_meters)
       sd_distance <- sd(individual_data_aggregated$distance_meters)
       min_date <- min(individual_data_aggregated$date)
