@@ -258,7 +258,7 @@ shinyModule <- function(input, output, session, data) {
   
   
   ##### time series
-  output$time_series <- renderPlotly({
+  rctv_time_series <- reactive({
     
     # load reactive data
     data_aggregated <- rctv_data_aggregated()
@@ -296,10 +296,12 @@ shinyModule <- function(input, output, session, data) {
     
   })
   
+  output$time_series <- renderPlotly({ rctv_time_series() })
+  
   
   
   ##### map
-  map <- reactive({
+  rctv_map <- reactive({
     
     # load reactive data
     processed_data <- rctv_processed_data()
@@ -394,7 +396,7 @@ shinyModule <- function(input, output, session, data) {
     
   })
  
-  output$map <- renderLeaflet({ map() })
+  output$map <- renderLeaflet({ rctv_map() })
   
   
   
