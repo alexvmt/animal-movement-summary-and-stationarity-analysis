@@ -78,19 +78,22 @@ shinyModule <- function(input, output, session, data) {
         
         <b>Filters:</b>
         <li>The date range filter applies to all individuals in a given dataset and all three components in the app.
-        The data processing loop and distance calculations are executed again if the date range filter is changed, which may take a moment.</li>
+        Filtering and again aggregating data if the date range filter is changed may take a moment.</li>
         <li>Selecting an individual will not affect the movement summary table.
-        Only the map and time series plot will be filtered.</li>
-        <li>Data is aggregated by day and distances are calculated in meters (using Haversine great circle distance).</li><br>
+        Only the map and time series plot will be filtered according to the selected individual.</li><br>
         
         <b>Potential workflow:</b><br>
-        A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
-        Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-        A date range always refers to the last n days of each given animal's tracking data time series.<br><br>
+        A potential workflow could start by spotting a single animal of interest in either the table or the map.
+        Then the data can be filtered for this specific animal and different date ranges can also be analyzed.
+        A date range always refers to the last n days of each animal's tracking data time series.<br><br>
         
         <b>Notes:</b>
+        <li>Aggregation happens at a daily resolution.</li>
+        <li>Distances are calculated in meters (using Haversine great circle distance).</li>
+        <li>The maximum date range to be analyzed are the last 365 days per individual.</li>
         <li>Please note that the app performs best with rather small datasets, containing not too many individuals.
-        This is mainly because calculating distances between coordinates is computationaly intense when there are many measurements (e. g. every 5 minutes).</li>
+        This is mainly because loading data and calculating distances between coordinates is computationaly intense when there are frequent location measurements (e. g. every 5 minutes).</li>
+        <li>Plotting many locations for many individuals on the map also slows the app down.</li>
         <li>If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order).</li>"
       )
     ))
@@ -403,7 +406,7 @@ shinyModule <- function(input, output, session, data) {
 				              var_measures = round(var(measures_per_date), 1))
     
     # create empty dataframe to store movement summary
-    movement_summary_columns <- c("individual", "start date", "end date", "#days w measures", "#days w/o measures", "today below avg.", "total distance (m)", "avg. distance (m)")
+    movement_summary_columns <- c("individual", "start date", "end date", "#days w measures", "#days w/o measures", "last below avg.", "total distance (m)", "avg. distance (m)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -417,13 +420,13 @@ shinyModule <- function(input, output, session, data) {
       missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
-      # calculate today below average
+      # calculate last below average
       avg_distance <- mean(individual_data_aggregated$daily_distance_meters)
       sd_distance <- sd(individual_data_aggregated$daily_distance_meters)
       min_date <- min(individual_data_aggregated$date)
       max_date <- max(individual_data_aggregated$date)
-      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
-      below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
+      meters_last <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
+      below_last <- ifelse(meters_last < avg_distance - (1.5 * sd_distance), "yes", "no")
 
       # store values
       individual_movement_summary <- c(individual,
@@ -431,7 +434,7 @@ shinyModule <- function(input, output, session, data) {
                                        as.character(max_date),
                                        dim(individual_data_aggregated)[1],
                                        missing_days,
-                                       below_today,
+                                       below_last,
                                        round(sum(individual_data_aggregated$daily_distance_meters), 0),
                                        round(avg_distance, 0))
       
