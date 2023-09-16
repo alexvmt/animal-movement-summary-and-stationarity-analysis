@@ -219,14 +219,17 @@ shinyModule <- function(input, output, session, data) {
       group_by(tag.local.identifier) %>% 
       summarise(max_date = max(date))
     
-    list(data_processed = data_processed, max_dates = max_dates)
+    # get individuals
+    individuals <- unique(data_processed$tag.local.identifier)
+    
+    list(data_processed = data_processed, max_dates = max_dates, individuals = individuals)
     
   })
   
   
   
-  ##### filter and aggregate processed data
-  rctv_data_aggregated <- reactive({
+  ##### filter processed data
+  rctv_data_processed_filtered <- reactive({
     
     # load reactive data
     data_processed <- rctv_data_processed()$data_processed
@@ -235,15 +238,32 @@ shinyModule <- function(input, output, session, data) {
     # get last n days
     last_n_days <- as.numeric(input$dropdown_date_range)
     
-    # aggregate distances by date and individual
-    data_aggregated <- data_processed %>% 
+    # filter data according to selected date range
+    data_processed_filtered <- data_processed %>% 
       left_join(max_dates, by = "tag.local.identifier") %>% 
-      filter(date >= max_date - last_n_days) %>% 
+      filter(date >= max_date - last_n_days)
+    
+    data_processed_filtered
+    
+  })
+  
+  
+  
+  ##### aggregate filtered processed data
+  rctv_data_aggregated <- reactive({
+    
+    # load reactive data
+    data_processed_filtered <- rctv_data_processed_filtered()
+    
+    # aggregate distances by date and individual
+    data_aggregated <- data_processed_filtered %>% 
       group_by(date, tag.local.identifier) %>% 
       summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
                 measures_per_date = n())
     
-    data_aggregated
+    individuals <- unique(data_aggregated$tag.local.identifier)
+    
+    list(data_aggregated = data_aggregated, individuals = individuals)
     
   })
   
@@ -253,7 +273,7 @@ shinyModule <- function(input, output, session, data) {
   rctv_time_series <- reactive({
     
     # load reactive data
-    data_aggregated <- rctv_data_aggregated()
+    data_aggregated <- rctv_data_aggregated()$data_aggregated
     
     # select individual to plot data for
     if (input$dropdown_individual == "all") {
@@ -396,10 +416,8 @@ shinyModule <- function(input, output, session, data) {
   rctv_movement_summary <- reactive({
     
     # load reactive data
-    data_aggregated <- rctv_data_aggregated()
-    
-    # get individuals
-    individuals <- unique(data_aggregated$tag.local.identifier)
+    data_aggregated <- rctv_data_aggregated()$data_aggregated
+    individuals <- rctv_data_aggregated()$individuals
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual",
