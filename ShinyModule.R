@@ -214,24 +214,12 @@ shinyModule <- function(input, output, session, data) {
     data_processed <- data_processed %>% 
       filter(!is.na(distance_meters))
     
-    data_processed
-    
-  })
-  
-  
-  
-  ##### get max dates
-  rctv_max_dates <- reactive({
-    
-    # load reactive data
-    data_processed <- rctv_data_processed()
-    
     # get max date per individual
     max_dates <- data_processed %>% 
       group_by(tag.local.identifier) %>% 
       summarise(max_date = max(date))
     
-    max_dates
+    list(data_processed = data_processed, max_dates = max_dates)
     
   })
   
@@ -241,10 +229,10 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_aggregated <- reactive({
     
     # load reactive data
-    data_processed <- rctv_data_processed()
-    max_dates <- rctv_max_dates()
+    data_processed <- rctv_data_processed()$data_processed
+    max_dates <- rctv_data_processed()$max_dates
     
-    # set last n days
+    # get last n days
     last_n_days <- as.numeric(input$dropdown_date_range)
     
     # aggregate distances by date and individual
@@ -308,7 +296,7 @@ shinyModule <- function(input, output, session, data) {
   rctv_map <- reactive({
     
     # load reactive data
-    data_processed <- rctv_data_processed()
+    data_processed <- rctv_data_processed()$data_processed
     
     # set map colors
     qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
@@ -412,12 +400,6 @@ shinyModule <- function(input, output, session, data) {
     
     # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
-
-    # calculate average measures per day and variance
-    measures_aggregated <- data_aggregated %>% 
-				    group_by(tag.local.identifier) %>% 
-				    summarise(avg_measures = round(mean(measures_per_date), 1),
-				              var_measures = round(var(measures_per_date), 1))
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual",
@@ -463,6 +445,12 @@ shinyModule <- function(input, output, session, data) {
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
+    
+    # calculate average measures per day and variance
+    measures_aggregated <- data_aggregated %>% 
+      group_by(tag.local.identifier) %>% 
+      summarise(avg_measures = round(mean(measures_per_date), 1),
+                var_measures = round(var(measures_per_date), 1))
 
     # join avg and var movement
     movement_summary <- movement_summary %>% 
