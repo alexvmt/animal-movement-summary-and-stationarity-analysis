@@ -137,7 +137,11 @@ shinyModule <- function(input, output, session, data) {
     
     # create empty dataframe to store processed individual data
     data_processed <- data.frame(matrix(ncol = 5, nrow = 0))
-    processed_data_columns <- c("tag.local.identifier", "timestamps", "location.long", "location.lat", "date")
+    processed_data_columns <- c("tag.local.identifier",
+                                "timestamps",
+                                "location.long",
+                                "location.lat",
+                                "date")
     colnames(data_processed) <- processed_data_columns
     
     # set max number of last days to process
@@ -324,11 +328,11 @@ shinyModule <- function(input, output, session, data) {
     # filter for date range
     data_processed_filtered <- NULL
     for (this_tag in unique(data_processed$tag.local.identifier)) {
-      individual_processed_data <- data_processed[data_processed$tag.local.identifier == this_tag, ]
-      temp_dates <- as.Date(individual_processed_data$timestamps)
+      individual_data_processed <- data_processed[data_processed$tag.local.identifier == this_tag, ]
+      temp_dates <- as.Date(individual_data_processed$timestamps)
       max_temp_dates <- max(temp_dates)
-      individual_processed_data <- individual_processed_data[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
-      data_processed_filtered <- rbind(data_processed_filtered, individual_processed_data)
+      individual_data_processed <- individual_data_processed[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
+      data_processed_filtered <- rbind(data_processed_filtered, individual_data_processed)
     }
     
     # get remaining individuals
@@ -416,7 +420,14 @@ shinyModule <- function(input, output, session, data) {
 				              var_measures = round(var(measures_per_date), 1))
     
     # create empty dataframe to store movement summary
-    movement_summary_columns <- c("individual", "start date", "end date", "#days w measures", "#days w/o measures", "today below avg.", "total distance (m)", "avg. distance (m)")
+    movement_summary_columns <- c("individual",
+                                  "start date",
+                                  "end date",
+                                  "#days w measures",
+                                  "#days w/o measures",
+                                  "today below avg.",
+                                  "total distance (m)",
+                                  "avg. distance (m)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -456,11 +467,13 @@ shinyModule <- function(input, output, session, data) {
     # join avg and var movement
     movement_summary <- movement_summary %>% 
       left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
-    colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
+    colnames(movement_summary) <- c(head(colnames(movement_summary), -2),
+                                    "avg. measures",
+                                    "var. measures")
 
     # convert relevant columns to numeric
-    movement_summary[, 4:5] <- apply(movement_summary[, 4:5], 2, as.numeric)
-    movement_summary[, 7:10] <- apply(movement_summary[, 7:10], 2, as.numeric)
+    movement_summary[ , 4:5] <- apply(movement_summary[ , 4:5], 2, as.numeric)
+    movement_summary[ , 7:10] <- apply(movement_summary[ , 7:10], 2, as.numeric)
 
     movement_summary
     
