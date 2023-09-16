@@ -108,7 +108,7 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_processed <- reactive({
     
     # show modal during data processing
-    show_modal_spinner(text = "Processing data. Calculating distances. This may take a moment. Please wait.")
+    show_modal_spinner(text = "Processing data and calculating distances. This may take a moment. Please wait.")
     
     # transform move object to dataframe
     data_df <- as.data.frame(data)
@@ -206,10 +206,6 @@ shinyModule <- function(input, output, session, data) {
                                              lat_b = data_processed$location.lat.lag,
                                              FUN = calculate_distance_in_meters_between_coordinates)
     
-    # remove modal after data processing and notify user
-    remove_modal_spinner()
-    notify_success("Data processing complete.")
-    
     # drop rows with missing distances
     data_processed <- data_processed %>% 
       filter(!is.na(distance_meters))
@@ -219,10 +215,11 @@ shinyModule <- function(input, output, session, data) {
       group_by(tag.local.identifier) %>% 
       summarise(max_date = max(date))
     
-    # get individuals
-    individuals <- unique(data_processed$tag.local.identifier)
+    # remove modal after data processing and notify user
+    remove_modal_spinner()
+    notify_success("Processing data and calculating distances complete.")
     
-    list(data_processed = data_processed, max_dates = max_dates, individuals = individuals)
+    list(data_processed = data_processed, max_dates = max_dates)
     
   })
   
@@ -230,6 +227,9 @@ shinyModule <- function(input, output, session, data) {
   
   ##### filter processed data
   rctv_data_processed_filtered <- reactive({
+    
+    # show modal during data filtering
+    show_modal_spinner(text = "Filtering data according to selected date range. This may take a moment. Please wait.")
     
     # load reactive data
     data_processed <- rctv_data_processed()$data_processed
@@ -243,7 +243,14 @@ shinyModule <- function(input, output, session, data) {
       left_join(max_dates, by = "tag.local.identifier") %>% 
       filter(date >= max_date - last_n_days)
     
-    data_processed_filtered
+    # get individuals
+    individuals <- unique(data_processed_filtered$tag.local.identifier)
+    
+    # remove modal after data filtering and notify user
+    remove_modal_spinner()
+    notify_success("Data filtering according to selected date range complete.")
+    
+    list(data_processed_filtered = data_processed_filtered, individuals = individuals)
     
   })
   
@@ -253,7 +260,7 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_aggregated <- reactive({
     
     # load reactive data
-    data_processed_filtered <- rctv_data_processed_filtered()
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
     
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
@@ -261,6 +268,7 @@ shinyModule <- function(input, output, session, data) {
       summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
                 measures_per_date = n())
     
+    # get individuals
     individuals <- unique(data_aggregated$tag.local.identifier)
     
     list(data_aggregated = data_aggregated, individuals = individuals)
@@ -316,47 +324,35 @@ shinyModule <- function(input, output, session, data) {
   rctv_map <- reactive({
     
     # load reactive data
-    data_processed <- rctv_data_processed()$data_processed
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
+    individuals <- rctv_data_processed_filtered()$individuals
     
-    # set map colors
+    # set map colors and parameters
     qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
     col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
+    this_line_opacity <- 0.8
+    this_line_weight <- 2
     
-    # store individual names and colors
-    individual_names_original <- unique(data_processed$tag.local.identifier)
-    individual_colors <- col_vector[1:length(individual_names_original)]
+    # store individual colors
+    individual_colors <- col_vector[1:length(individuals)]
 
     # filter for individual
     if (input$dropdown_individual == "all") {
       # do nothing and proceed
     } else {
-      data_processed <- data_processed[data_processed$tag.local.identifier == input$dropdown_individual, ]
-    }
-    
-    # filter for date range
-    data_processed_filtered <- NULL
-    for (this_tag in unique(data_processed$tag.local.identifier)) {
-      individual_data_processed <- data_processed[data_processed$tag.local.identifier == this_tag, ]
-      temp_dates <- as.Date(individual_data_processed$timestamps)
-      max_temp_dates <- max(temp_dates)
-      individual_data_processed <- individual_data_processed[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
-      data_processed_filtered <- rbind(data_processed_filtered, individual_data_processed)
+      data_processed_filtered <- data_processed_filtered[data_processed_filtered$tag.local.identifier == input$dropdown_individual, ]
     }
     
     # get remaining individuals
-    individual_names <- unique(data_processed_filtered$tag.local.identifier)
-    if (length(individual_names_original) == 1) {
+    if (length(individuals) == 1) {
       selected_id <- 1
     } else {
-      selected_id <- which(individual_names_original %in% input$dropdown_individual)
+      selected_id <- which(individuals %in% input$dropdown_individual)
     }
-    
-    this_line_opacity <- 0.8
-    this_line_weight <- 2
 
-    # limit the number of shown tracks on the map if needed
-    # remove the legend in case of more than 10 tracks
-    track_limit <- length(individual_names)
+    # limit number of shown tracks on map if needed
+    # remove legend in case of more than 10 tracks
+    track_limit <- length(individuals)
     fixed_track_limit <- 10
     if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
@@ -366,14 +362,14 @@ shinyModule <- function(input, output, session, data) {
     map <- leaflet() %>% 
       addTiles()
     
-    # check if only one element is in the selected set
-    if (length(individual_names) > 1) {
+    # check if only one element is in selected set
+    if (length(individuals) > 1) {
 
-      for (i in seq(along = head(individual_names, n = track_limit))) {
+      for (i in seq(along = head(individuals, n = track_limit))) {
 
         map <- map %>% 
-          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = individual_names[i], weight = this_line_weight) %>% 
-          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
+          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = individuals[i], weight = this_line_weight) %>% 
+          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individuals[i])
       
       }
       
@@ -384,7 +380,7 @@ shinyModule <- function(input, output, session, data) {
       last_time <- tail(data_processed_filtered, 1)$timestamps
 
       map <- map %>% 
-        addPolylines(data = data_processed_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individual_names_original[selected_id], weight = this_line_weight) %>% 
+        addPolylines(data = data_processed_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individuals[selected_id], weight = this_line_weight) %>% 
         addCircleMarkers(data = data_processed_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label = ~timestamps, clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
@@ -400,7 +396,7 @@ shinyModule <- function(input, output, session, data) {
     if (track_limit <= fixed_track_limit) {
       
       map <- map %>% 
-        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
+        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individuals[selected_id])
     
     }
 
