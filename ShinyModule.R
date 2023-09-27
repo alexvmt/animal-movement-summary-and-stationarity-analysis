@@ -378,7 +378,8 @@ shinyModule <- function(input, output, session, data) {
     if(track_limit <= fixed_track_limit) {
       
       map  <- map %>% 
-        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
+        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id]) %>% 
+        addScaleBar()
     
     }
 
