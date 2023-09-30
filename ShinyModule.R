@@ -343,16 +343,20 @@ shinyModule <- function(input, output, session, data) {
       data_processed_filtered <- data_processed_filtered[data_processed_filtered$tag.local.identifier == input$dropdown_individual, ]
     }
     
-    # get remaining individuals
-    if (length(individuals) == 1) {
+    # get remaining individual(s)
+    remaining_individuals <- unique(data_processed_filtered$tag.local.identifier)
+    
+    # get selected id
+    length_remaining_individuals <- length(remaining_individuals) 
+    if (length_remaining_individuals == 1) {
       selected_id <- 1
     } else {
-      selected_id <- which(individuals %in% input$dropdown_individual)
+      selected_id <- which(remaining_individuals %in% input$dropdown_individual)
     }
 
     # limit number of shown tracks on map if needed
     # remove legend in case of more than 10 tracks
-    track_limit <- length(individuals)
+    track_limit <- length_remaining_individuals
     fixed_track_limit <- 10
     if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
@@ -363,13 +367,13 @@ shinyModule <- function(input, output, session, data) {
       addTiles()
     
     # check if only one element is in selected set
-    if (length(individuals) > 1) {
+    if (length(remaining_individuals) > 1) {
 
-      for (i in seq(along = head(individuals, n = track_limit))) {
+      for (i in seq(along = head(remaining_individuals, n = track_limit))) {
 
         map <- map %>% 
-          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = individuals[i], weight = this_line_weight) %>% 
-          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individuals[i])
+          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = remaining_individuals[i], weight = this_line_weight) %>% 
+          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = remaining_individuals[i])
       
       }
       
