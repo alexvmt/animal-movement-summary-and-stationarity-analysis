@@ -309,8 +309,18 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # plot time series for selected individual
-    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
-      layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
+    p <- plot_ly(as.data.frame(data_to_plot),
+		 x = ~date,
+		 y = ~distance_meters,
+		 type = "scatter",
+		 mode = "lines",
+		 name = individual) %>% 
+      layout(showlegend = TRUE,
+	     legend = list(orientation = "h",
+			   xanchor = "center",
+			   x = 0.5,
+			   y = 1)
+	    )
     
     p
     
@@ -330,8 +340,11 @@ shinyModule <- function(input, output, session, data) {
     # set map colors and parameters
     qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
     col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
-    this_line_opacity <- 0.8
-    this_line_weight <- 2
+    line_opacity <- 0.8
+    line_weight <- 2
+    circle_opacity <- 0.5
+    circle_fill_opacity <- 0.3
+    legend_opacity <- 0.6
     
     # store individual colors
     individual_colors <- col_vector[1:length(individuals)]
@@ -372,8 +385,20 @@ shinyModule <- function(input, output, session, data) {
       for (i in seq(along = head(remaining_individuals, n = track_limit))) {
 
         map <- map %>% 
-          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = remaining_individuals[i], weight = this_line_weight) %>% 
-          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = remaining_individuals[i])
+          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
+		       lat = ~location.lat,
+		       lng = ~location.long,
+		       color = individual_colors[i],
+		       opacity = line_opacity,
+		       group = remaining_individuals[i],
+		       weight = line_weight) %>% 
+          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
+		     lat = ~location.lat,
+		     lng = ~location.long,
+		     color = individual_colors[i],
+		     opacity = circle_opacity,
+		     fillOpacity = circle_fill_opacity,
+		     group = remaining_individuals[i])
       
       }
       
@@ -384,8 +409,21 @@ shinyModule <- function(input, output, session, data) {
       last_time <- tail(data_processed_filtered, 1)$timestamps
 
       map <- map %>% 
-        addPolylines(data = data_processed_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individuals[selected_id], weight = this_line_weight) %>% 
-        addCircleMarkers(data = data_processed_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label = ~timestamps, clusterOptions = markerClusterOptions()) %>% 
+        addPolylines(data = data_processed_filtered,
+		     lat = ~location.lat,
+		     lng = ~location.long,
+		     color = individual_colors[selected_id],
+		     opacity = line_opacity,
+		     group = individuals[selected_id],
+		     weight = line_weight) %>% 
+        addCircleMarkers(data = data_processed_filtered,
+			 lat = ~location.lat,
+			 lng = ~location.long,
+			 color = individual_colors[selected_id],
+			 opacity = circle_opacity,
+			 fillOpacity = circle_fill_opacity,
+			 label = ~timestamps,
+			 clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
                    label = paste0("Last location at: ", last_time))
@@ -400,7 +438,10 @@ shinyModule <- function(input, output, session, data) {
     if (track_limit <= fixed_track_limit) {
       
       map <- map %>% 
-        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individuals[selected_id])
+        addLegend(position = "topright",
+		  colors = individual_colors[selected_id],
+		  opacity = legend_opacity,
+		  labels = individuals[selected_id])
     
     }
 
