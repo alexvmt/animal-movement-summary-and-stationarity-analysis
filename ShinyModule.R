@@ -219,10 +219,10 @@ shinyModule <- function(input, output, session, data) {
     }
     
     data_processed$daily_distance_meters <- mapply(lon_a = data_processed$location.long,
-                                             lat_a = data_processed$location.lat,
-                                             lon_b = data_processed$location.long.lag,
-                                             lat_b = data_processed$location.lat.lag,
-                                             FUN = calculate_distance_in_meters_between_coordinates)
+                                                   lat_a = data_processed$location.lat,
+                                                   lon_b = data_processed$location.long.lag,
+                                                   lat_b = data_processed$location.lat.lag,
+                                                   FUN = calculate_distance_in_meters_between_coordinates)
     
     # drop rows with missing distances
     data_processed <- data_processed %>% 
@@ -328,17 +328,17 @@ shinyModule <- function(input, output, session, data) {
     
     # plot time series for selected individual
     p <- plot_ly(as.data.frame(data_to_plot),
-		 x = ~date,
-		 y = ~daily_distance_meters,
-		 type = "scatter",
-		 mode = "lines",
-		 name = individual) %>% 
+                 x = ~date,
+                 y = ~daily_distance_meters,
+                 type = "scatter",
+                 mode = "lines",
+                 name = individual) %>% 
       layout(showlegend = TRUE,
-	     legend = list(orientation = "h",
-			   xanchor = "center",
-			   x = 0.5,
-			   y = 1)
-	    )
+             legend = list(orientation = "h",
+                           xanchor = "center",
+                           x = 0.5,
+                           y = 1),
+             title = "Do the last distances moved look anomalous to you?")
     
     p
     
@@ -404,19 +404,19 @@ shinyModule <- function(input, output, session, data) {
 
         map <- map %>% 
           addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
-		       lat = ~location.lat,
-		       lng = ~location.long,
-		       color = individual_colors[i],
-		       opacity = line_opacity,
-		       group = remaining_individuals[i],
-		       weight = line_weight) %>% 
+                       lat = ~location.lat,
+                       lng = ~location.long,
+                       color = individual_colors[i],
+                       opacity = line_opacity,
+                       group = remaining_individuals[i],
+                       weight = line_weight) %>% 
           addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
-		     lat = ~location.lat,
-		     lng = ~location.long,
-		     color = individual_colors[i],
-		     opacity = circle_opacity,
-		     fillOpacity = circle_fill_opacity,
-		     group = remaining_individuals[i])
+                     lat = ~location.lat,
+                     lng = ~location.long,
+                     color = individual_colors[i],
+                     opacity = circle_opacity,
+                     fillOpacity = circle_fill_opacity,
+                     group = remaining_individuals[i])
       
       }
       
@@ -428,20 +428,20 @@ shinyModule <- function(input, output, session, data) {
 
       map <- map %>% 
         addPolylines(data = data_processed_filtered,
-		     lat = ~location.lat,
-		     lng = ~location.long,
-		     color = individual_colors[selected_id],
-		     opacity = line_opacity,
-		     group = individuals[selected_id],
-		     weight = line_weight) %>% 
+                     lat = ~location.lat,
+                     lng = ~location.long,
+                     color = individual_colors[selected_id],
+                     opacity = line_opacity,
+                     group = individuals[selected_id],
+                     weight = line_weight) %>% 
         addCircleMarkers(data = data_processed_filtered,
-			 lat = ~location.lat,
-			 lng = ~location.long,
-			 color = individual_colors[selected_id],
-			 opacity = circle_opacity,
-			 fillOpacity = circle_fill_opacity,
-			 label = ~timestamps,
-			 clusterOptions = markerClusterOptions()) %>% 
+                         lat = ~location.lat,
+                         lng = ~location.long,
+                         color = individual_colors[selected_id],
+                         opacity = circle_opacity,
+                         fillOpacity = circle_fill_opacity,
+                         label = ~timestamps,
+                         clusterOptions = markerClusterOptions()) %>% 
         addMarkers(lng = last_lon,
                    lat = last_lat,
                    label = paste0("Last location at: ", last_time))
@@ -457,9 +457,10 @@ shinyModule <- function(input, output, session, data) {
       
       map <- map %>% 
         addLegend(position = "topright",
-		  colors = individual_colors[selected_id],
-		  opacity = legend_opacity,
-		  labels = individuals[selected_id])
+                  colors = individual_colors[selected_id],
+                  opacity = legend_opacity,
+                  labels = individuals[selected_id]) %>% 
+        addScaleBar()
     
     }
 
