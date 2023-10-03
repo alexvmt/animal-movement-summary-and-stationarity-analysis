@@ -218,7 +218,7 @@ shinyModule <- function(input, output, session, data) {
       distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
     }
     
-    data_processed$distance_meters <- mapply(lon_a = data_processed$location.long,
+    data_processed$daily_distance_meters <- mapply(lon_a = data_processed$location.long,
                                              lat_a = data_processed$location.lat,
                                              lon_b = data_processed$location.long.lag,
                                              lat_b = data_processed$location.lat.lag,
@@ -226,7 +226,7 @@ shinyModule <- function(input, output, session, data) {
     
     # drop rows with missing distances
     data_processed <- data_processed %>% 
-      filter(!is.na(distance_meters))
+      filter(!is.na(daily_distance_meters))
     
     # get max date per individual
     max_dates <- data_processed %>% 
@@ -283,7 +283,7 @@ shinyModule <- function(input, output, session, data) {
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
       group_by(date, tag.local.identifier) %>% 
-      summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
+      summarise(daily_distance_meters = sum(daily_distance_meters, na.rm = TRUE),
                 measures_per_date = n())
     
     # get individuals
@@ -329,7 +329,7 @@ shinyModule <- function(input, output, session, data) {
     # plot time series for selected individual
     p <- plot_ly(as.data.frame(data_to_plot),
 		 x = ~date,
-		 y = ~distance_meters,
+		 y = ~daily_distance_meters,
 		 type = "scatter",
 		 mode = "lines",
 		 name = individual) %>% 
@@ -501,8 +501,8 @@ shinyModule <- function(input, output, session, data) {
       missing_days <- ifelse(missing_days < 0, 0, missing_days)
       
       # check whether last distance is below average
-      avg_distance <- mean(individual_data_aggregated$distance_meters)
-      sd_distance <- sd(individual_data_aggregated$distance_meters)
+      avg_distance <- mean(individual_data_aggregated$daily_distance_meters)
+      sd_distance <- sd(individual_data_aggregated$daily_distance_meters)
       min_date <- min(individual_data_aggregated$date)
       max_date <- max(individual_data_aggregated$date)
       meters_last <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
