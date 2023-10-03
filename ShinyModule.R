@@ -218,15 +218,15 @@ shinyModule <- function(input, output, session, data) {
       distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
     }
     
-    data_processed$daily_distance_meters <- mapply(lon_a = data_processed$location.long,
-                                                   lat_a = data_processed$location.lat,
-                                                   lon_b = data_processed$location.long.lag,
-                                                   lat_b = data_processed$location.lat.lag,
-                                                   FUN = calculate_distance_in_meters_between_coordinates)
+    data_processed$distance_meters <- mapply(lon_a = data_processed$location.long,
+                                             lat_a = data_processed$location.lat,
+                                             lon_b = data_processed$location.long.lag,
+                                             lat_b = data_processed$location.lat.lag,
+                                             FUN = calculate_distance_in_meters_between_coordinates)
     
     # drop rows with missing distances
     data_processed <- data_processed %>% 
-      filter(!is.na(daily_distance_meters))
+      filter(!is.na(distance_meters))
     
     # get max date per individual
     max_dates <- data_processed %>% 
@@ -283,7 +283,7 @@ shinyModule <- function(input, output, session, data) {
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
       group_by(date, tag.local.identifier) %>% 
-      summarise(daily_distance_meters = sum(daily_distance_meters, na.rm = TRUE),
+      summarise(daily_distance_meters = sum(distance_meters, na.rm = TRUE),
                 measures_per_date = n())
     
     # get individuals
@@ -485,7 +485,7 @@ shinyModule <- function(input, output, session, data) {
                                   "end date",
                                   "#days w measures",
                                   "#days w/o measures",
-                                  "today below avg.",
+                                  "last below avg.",
                                   "total distance (m)",
                                   "avg. distance (m)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
