@@ -408,15 +408,15 @@ shinyModule <- function(input, output, session, data) {
                        lng = ~location.long,
                        color = individual_colors[i],
                        opacity = line_opacity,
-                       group = remaining_individuals[i],
-                       weight = line_weight) %>% 
+                       weight = line_weight,
+                       group = "Lines") %>% 
           addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
                      lat = ~location.lat,
                      lng = ~location.long,
                      color = individual_colors[i],
                      opacity = circle_opacity,
                      fillOpacity = circle_fill_opacity,
-                     group = remaining_individuals[i])
+                     group = "Points")
       
       }
       
@@ -443,8 +443,8 @@ shinyModule <- function(input, output, session, data) {
                      lng = ~location.long,
                      color = individual_colors[selected_id],
                      opacity = line_opacity,
-                     group = individuals[selected_id],
-                     weight = line_weight) %>% 
+                     weight = line_weight,
+                     group = "Lines") %>% 
         addCircleMarkers(data = data_processed_filtered,
                          lat = ~location.lat,
                          lng = ~location.long,
@@ -452,7 +452,8 @@ shinyModule <- function(input, output, session, data) {
                          opacity = circle_opacity,
                          fillOpacity = circle_fill_opacity,
                          label = ~timestamps,
-                         clusterOptions = markerClusterOptions()) %>% 
+                         clusterOptions = markerClusterOptions(),
+                         group = "Points") %>% 
         addAwesomeMarkers(lng = first_lon,
                           lat = first_lat,
                           icon = start_icon,
@@ -479,7 +480,9 @@ shinyModule <- function(input, output, session, data) {
         addScaleBar(position = "topleft") %>% 
         addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>% 
         addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-        addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"), options = layersControlOptions(collapsed = FALSE))
+        addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"),
+                         overlayGroups = c("Lines", "Points"),
+                         options = layersControlOptions(collapsed = FALSE))
     
     }
 
