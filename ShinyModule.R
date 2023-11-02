@@ -422,9 +422,20 @@ shinyModule <- function(input, output, session, data) {
       
     } else {
       
+      first_lon <- head(data_processed_filtered, 1)$location.long
+      first_lat <- head(data_processed_filtered, 1)$location.lat
+      first_time <- head(data_processed_filtered, 1)$timestamps
+      
       last_lon <- tail(data_processed_filtered, 1)$location.long
       last_lat <- tail(data_processed_filtered, 1)$location.lat
       last_time <- tail(data_processed_filtered, 1)$timestamps
+      
+      start_icon <- awesomeIcons(icon = "map-pin",
+                                 library = "fa",
+                                 markerColor = "white")
+      end_icon <- awesomeIcons(icon = "map-pin",
+                               library = "fa",
+                               markerColor = "red")
 
       map <- map %>% 
         addPolylines(data = data_processed_filtered,
@@ -442,9 +453,14 @@ shinyModule <- function(input, output, session, data) {
                          fillOpacity = circle_fill_opacity,
                          label = ~timestamps,
                          clusterOptions = markerClusterOptions()) %>% 
-        addMarkers(lng = last_lon,
-                   lat = last_lat,
-                   label = paste0("Last location at: ", last_time))
+        addAwesomeMarkers(lng = first_lon,
+                          lat = first_lat,
+                          icon = start_icon,
+                          label = paste0("First location at: ", first_time)) %>% 
+        addAwesomeMarkers(lng = last_lon,
+                          lat = last_lat,
+                          icon = end_icon,
+                          label = paste0("Last location at: ", last_time))
 
     }
     
