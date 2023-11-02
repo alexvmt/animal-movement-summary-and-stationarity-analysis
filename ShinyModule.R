@@ -460,7 +460,10 @@ shinyModule <- function(input, output, session, data) {
                   colors = individual_colors[selected_id],
                   opacity = legend_opacity,
                   labels = individuals[selected_id]) %>% 
-        addScaleBar()
+        addScaleBar(position = "topleft") %>% 
+        addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>% 
+        addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+        addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"), options = layersControlOptions(collapsed = FALSE))
     
     }
 
