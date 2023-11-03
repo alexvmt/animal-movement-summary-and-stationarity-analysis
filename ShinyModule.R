@@ -376,32 +376,31 @@ shinyModule <- function(input, output, session, data) {
     
     # get remaining individual(s)
     remaining_individuals <- unique(data_processed_filtered$tag.local.identifier)
+    length_remaining_individuals <- length(remaining_individuals)
     
-    # get selected id
-    length_remaining_individuals <- length(remaining_individuals) 
-    if (length_remaining_individuals == 1) {
-      selected_id <- 1
-    } else {
-      selected_id <- which(remaining_individuals %in% input$dropdown_individual)
-    }
-
     # limit number of shown tracks on map if needed
-    # remove legend in case of more than 10 tracks
     track_limit <- length_remaining_individuals
     fixed_track_limit <- 10
     if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
     }
 
-    # create map with lines for each individual
+    # create map with scale, tiles and controls
     map <- leaflet() %>% 
-      addTiles()
+      addTiles() %>% 
+      addScaleBar(position = "topleft") %>% 
+      addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>% 
+      addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+      addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"),
+                       overlayGroups = c("Lines", "Points"),
+                       options = layersControlOptions(collapsed = FALSE))
     
-    # check if only one element is in selected set
+    # populate map
     if (length(remaining_individuals) > 1) {
 
       for (i in seq(along = head(remaining_individuals, n = track_limit))) {
-
+        
+        # add lines and points
         map <- map %>% 
           addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
                        lat = ~location.lat,
@@ -416,12 +415,28 @@ shinyModule <- function(input, output, session, data) {
                      color = individual_colors[i],
                      opacity = circle_opacity,
                      fillOpacity = circle_fill_opacity,
+                     label = ~timestamps,
                      group = "Points")
       
       }
       
+      # don't show legend if map is showing more than 10 tracks
+      if (track_limit <= fixed_track_limit) {
+
+        map <- map %>% 
+          addLegend(position = "topright",
+                    colors = individual_colors,
+                    opacity = legend_opacity,
+                    labels = remaining_individuals)
+
+      }
+      
     } else {
       
+      # get index of selected individual
+      selected_index <- which(individuals == remaining_individuals)
+      
+      # get first and last lon, lat and time
       first_lon <- head(data_processed_filtered, 1)$location.long
       first_lat <- head(data_processed_filtered, 1)$location.lat
       first_time <- head(data_processed_filtered, 1)$timestamps
@@ -430,25 +445,27 @@ shinyModule <- function(input, output, session, data) {
       last_lat <- tail(data_processed_filtered, 1)$location.lat
       last_time <- tail(data_processed_filtered, 1)$timestamps
       
+      # create start and end icons
       start_icon <- awesomeIcons(icon = "map-pin",
                                  library = "fa",
                                  markerColor = "white")
       end_icon <- awesomeIcons(icon = "map-pin",
                                library = "fa",
                                markerColor = "red")
-
+      
+      # add lines, points and markers
       map <- map %>% 
         addPolylines(data = data_processed_filtered,
                      lat = ~location.lat,
                      lng = ~location.long,
-                     color = individual_colors[selected_id],
+                     color = individual_colors[selected_index],
                      opacity = line_opacity,
                      weight = line_weight,
                      group = "Lines") %>% 
         addCircleMarkers(data = data_processed_filtered,
                          lat = ~location.lat,
                          lng = ~location.long,
-                         color = individual_colors[selected_id],
+                         color = individual_colors[selected_index],
                          opacity = circle_opacity,
                          fillOpacity = circle_fill_opacity,
                          label = ~timestamps,
@@ -462,28 +479,14 @@ shinyModule <- function(input, output, session, data) {
                           lat = last_lat,
                           icon = end_icon,
                           label = paste0("Last location at: ", last_time))
-
-    }
-    
-    if (input$dropdown_individual == "all") {
-      selected_id <- 1:length(individual_colors)
-    }
-
-    # don't show legend if map is showing more than 10 tracks
-    if (track_limit <= fixed_track_limit) {
       
+      # add legend
       map <- map %>% 
         addLegend(position = "topright",
-                  colors = individual_colors[selected_id],
+                  colors = individual_colors[selected_index],
                   opacity = legend_opacity,
-                  labels = individuals[selected_id]) %>% 
-        addScaleBar(position = "topleft") %>% 
-        addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>% 
-        addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
-        addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"),
-                         overlayGroups = c("Lines", "Points"),
-                         options = layersControlOptions(collapsed = FALSE))
-    
+                  labels = remaining_individuals)
+
     }
 
     map
