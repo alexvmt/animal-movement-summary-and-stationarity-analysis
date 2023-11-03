@@ -24,7 +24,10 @@ library(shinybusy)
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
+  
+  # create function to insert linebreaks
   linebreaks <- function(n){HTML(strrep(br(), n))}
+  
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
@@ -44,10 +47,20 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last 180 days" = 180,
                                         "last year" = 365),
                          selected = c("last 180 days" = 180)),
+             numericInput(ns("max_diameter"),
+                         "Max. diameter (m):",
+                         100,
+                         min = 1,
+                         max = 10000),
+             numericInput(ns("min_duration"),
+                         "Min. duration (h):",
+                         24,
+                         min = 1,
+                         max = 240),
 	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
-	     actionButton(ns("about_button"), "Show app info"),
+	     downloadButton(ns("download_table"), "Download table"),
 	     linebreaks(2),
-	     downloadButton(ns("download_table"), "Download table")),
+	     actionButton(ns("about_button"), "Show app info")),
       column(10, dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
@@ -215,12 +228,13 @@ shinyModule <- function(input, output, session, data) {
                                               data_processed$location.lat.lag,
                                               NA)
     
-    # calculate distance between two location measurements
+    # create function to calculate distance between coordinates
     calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
       if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
+      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distVincentyEllipsoid)
     }
     
+    # calculate distance between two successive coordinates
     data_processed$distance_meters <- mapply(lon_a = data_processed$location.long,
                                              lat_a = data_processed$location.lat,
                                              lon_b = data_processed$location.long.lag,
@@ -236,11 +250,67 @@ shinyModule <- function(input, output, session, data) {
       group_by(tag.local.identifier) %>% 
       summarise(max_date = max(date))
     
+    # get last timestamp and coordinates per individual
+    last_timestamps_coordinates <- data_processed %>% 
+      group_by(tag.local.identifier) %>% 
+      arrange(timestamps) %>% 
+      filter(row_number() == n()) %>% 
+      rename(timestamps.last = timestamps,
+             location.long.last = location.long,
+             location.lat.last = location.lat) %>% 
+      select(tag.local.identifier,
+             timestamps.last,
+             location.long.last,
+             location.lat.last)
+    
+    # join data processed and last timestamps and coordinates
+    data_processed <- data_processed %>% 
+      left_join(last_timestamps_coordinates, by = "tag.local.identifier")
+    
+    # calculate difference between given and last timestamp
+    data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps.last, data_processed$timestamps, units ="hours"))
+    
+    # calculate distance between given and last coordinates
+    data_processed$distance_meters_last <- mapply(lon_a = data_processed$location.long,
+                                                  lat_a = data_processed$location.lat,
+                                                  lon_b = data_processed$location.long.last,
+                                                  lat_b = data_processed$location.lat.last,
+                                                  FUN = calculate_distance_in_meters_between_coordinates)
+    
     # remove modal after data processing and notify user
     remove_modal_spinner()
     notify_success("Processing data and calculating distances complete.")
     
     list(data_processed = data_processed, max_dates = max_dates)
+    
+  })
+  
+  
+  
+  ##### check individuals for stationarity
+  rctv_stationary_individuals <- reactive({
+    
+    # load reactive data
+    data_processed <- rctv_data_processed()$data_processed
+    
+    # get max diameter
+    max_diameter <- as.numeric(input$max_diameter)
+    
+    # get min duration
+    min_duration <- as.numeric(input$min_duration)
+    
+    # get non-stationary individuals if there are any
+    non_stationary_individuals <- data_processed %>% 
+      filter((difference_hours_last <= min_duration) & (distance_meters_last > max_diameter)) %>% 
+      distinct(tag.local.identifier)
+    
+    # get stationary individuals if there are any
+    stationary_individuals <- data_processed %>% 
+      distinct(tag.local.identifier) %>% 
+      anti_join(non_stationary_individuals, by = "tag.local.identifier") %>% 
+      mutate(stationary = "yes")
+    
+    stationary_individuals
     
   })
   
@@ -483,6 +553,7 @@ shinyModule <- function(input, output, session, data) {
     # load reactive data
     data_aggregated <- rctv_data_aggregated()$data_aggregated
     individuals <- rctv_data_aggregated()$individuals
+    stationary_individuals <- rctv_stationary_individuals()
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual",
@@ -491,7 +562,7 @@ shinyModule <- function(input, output, session, data) {
                                   "#days w measures",
                                   "#days w/o measures",
                                   "total distance (km)",
-                                  "avg. distance (km)")
+                                  "median distance (km)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -535,7 +606,7 @@ shinyModule <- function(input, output, session, data) {
                 var_measures = round(var(measures_per_date), 1)) %>% 
       rename(individual = tag.local.identifier)
 
-    # join existing movement summary and avg and var measures
+    # join avg and var measures
     movement_summary <- movement_summary %>% 
       left_join(measures_aggregated, by = "individual")
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2),
@@ -544,7 +615,20 @@ shinyModule <- function(input, output, session, data) {
 
     # convert relevant columns to numeric
     movement_summary[ , 4:9] <- apply(movement_summary[ , 4:9], 2, as.numeric)
-
+    
+    # join stationary individuals if there are any
+    if (nrow(stationary_individuals) > 0) {
+      
+      movement_summary <- movement_summary %>% 
+        left_join(stationary_individuals, by = join_by("individual" == "tag.local.identifier")) %>% 
+        mutate(stationary = ifelse(is.na(stationary), "no", stationary))
+      
+    } else {
+      
+      movement_summary <- cbind(movement_summary, stationary = "no")
+      
+    }
+    
     movement_summary
     
   })
