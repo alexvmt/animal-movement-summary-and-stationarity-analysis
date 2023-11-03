@@ -329,7 +329,7 @@ shinyModule <- function(input, output, session, data) {
     # plot time series for selected individual
     p <- plot_ly(as.data.frame(data_to_plot),
                  x = ~date,
-                 y = ~daily_distance_meters,
+                 y = ~daily_distance_meters / 1000,
                  type = "scatter",
                  mode = "lines",
                  name = individual) %>% 
@@ -338,7 +338,9 @@ shinyModule <- function(input, output, session, data) {
                            xanchor = "center",
                            x = 0.5,
                            y = 1),
-             title = "Do the last distances moved look anomalous to you?")
+             title = "Do the last distances moved look anomalous to you?",
+             yaxis = list(title = "Daily distance (km)"),
+             xaxis = list(title = "Date"))
     
     p
     
