@@ -24,6 +24,7 @@ library(shinybusy)
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
+  linebreaks <- function(n){HTML(strrep(br(), n))}
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
@@ -44,7 +45,9 @@ shinyModuleUserInterface <- function(id, label) {
                                         "last year" = 365),
                          selected = c("last 180 days" = 180)),
 	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
-             actionButton(ns("about_button"), "Show app info")),
+	     actionButton(ns("about_button"), "Show app info"),
+	     linebreaks(2),
+	     downloadButton(ns("download_table"), "Download table")),
       column(10, dataTableOutput(ns("movement_summary")))
     ),
     fluidRow(
@@ -547,6 +550,18 @@ shinyModule <- function(input, output, session, data) {
   })
   
   output$movement_summary <- renderDataTable({ datatable(rctv_movement_summary()) })
+  
+  
+  
+  ##### download table
+  output$download_table <- downloadHandler(
+    
+    filename = function(){paste0("movement_summary_last_", as.character(input$dropdown_date_range), "_days.csv")},
+    content = function(fname){write.csv(rctv_movement_summary(), file = fname, row.names = FALSE)}
+    
+    )
+  
+  
   
   # return unmodified input data
   return(reactive({ current() }))
