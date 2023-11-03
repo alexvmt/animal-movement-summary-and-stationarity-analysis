@@ -485,9 +485,8 @@ shinyModule <- function(input, output, session, data) {
                                   "end date",
                                   "#days w measures",
                                   "#days w/o measures",
-                                  "last below avg.",
-                                  "total distance (m)",
-                                  "avg. distance (m)")
+                                  "total distance (km)",
+                                  "avg. distance (km)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -497,49 +496,49 @@ shinyModule <- function(input, output, session, data) {
       # filter data based on individual
       individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
-      # calculate number of missing days
-      missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
-      missing_days <- ifelse(missing_days < 0, 0, missing_days)
+      # get start and end date
+      start_date <- min(individual_data_aggregated$date)
+      end_date <- max(individual_data_aggregated$date)
       
-      # check whether last distance is below average
-      avg_distance <- mean(individual_data_aggregated$daily_distance_meters)
-      sd_distance <- sd(individual_data_aggregated$daily_distance_meters)
-      min_date <- min(individual_data_aggregated$date)
-      max_date <- max(individual_data_aggregated$date)
-      meters_last <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
-      below_last <- ifelse(meters_last < avg_distance - (1.5 * sd_distance), "yes", "no")
+      # get number of days with and without measures
+      days_with_measures <- dim(individual_data_aggregated)[1]
+      days_without_measures <- as.numeric(input$dropdown_date_range) - days_with_measures
+      days_without_measures <- ifelse(days_without_measures < 0, 0, days_without_measures)
+      
+      # get total and median distance
+      total_distance <- sum(individual_data_aggregated$daily_distance_meters)
+      median_distance <- median(individual_data_aggregated$daily_distance_meters)
 
       # store values
       individual_movement_summary <- c(individual,
-                                       as.character(min_date),
-                                       as.character(max_date),
-                                       dim(individual_data_aggregated)[1],
-                                       missing_days,
-                                       below_last,
-                                       round(sum(individual_data_aggregated$daily_distance_meters), 0),
-                                       round(avg_distance, 0))
+                                       as.character(start_date),
+                                       as.character(end_date),
+                                       days_with_measures,
+                                       days_without_measures,
+                                       round(total_distance / 1000, 2),
+                                       round(median_distance / 1000, 2))
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
     
-    # calculate average measures per day and variance
+    # calculate average number of measures per day and variance
     measures_aggregated <- data_aggregated %>% 
       group_by(tag.local.identifier) %>% 
       summarise(avg_measures = round(mean(measures_per_date), 1),
-                var_measures = round(var(measures_per_date), 1))
+                var_measures = round(var(measures_per_date), 1)) %>% 
+      rename(individual = tag.local.identifier)
 
-    # join avg and var movement
+    # join existing movement summary and avg and var measures
     movement_summary <- movement_summary %>% 
-      left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
+      left_join(measures_aggregated, by = "individual")
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2),
                                     "avg. measures",
                                     "var. measures")
 
     # convert relevant columns to numeric
-    movement_summary[ , 4:5] <- apply(movement_summary[ , 4:5], 2, as.numeric)
-    movement_summary[ , 7:10] <- apply(movement_summary[ , 7:10], 2, as.numeric)
+    movement_summary[ , 4:9] <- apply(movement_summary[ , 4:9], 2, as.numeric)
 
     movement_summary
     
