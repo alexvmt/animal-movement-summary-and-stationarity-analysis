@@ -51,7 +51,7 @@ shinyModuleUserInterface <- function(id, label) {
                          "Max. diameter (m):",
                          100,
                          min = 1,
-                         max = 10000),
+                         max = 100000),
              numericInput(ns("min_duration"),
                          "Min. duration (h):",
                          24,
@@ -235,15 +235,15 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # calculate distance between two successive coordinates
-    data_processed$distance_meters <- mapply(lon_a = data_processed$location.long,
-                                             lat_a = data_processed$location.lat,
-                                             lon_b = data_processed$location.long.lag,
-                                             lat_b = data_processed$location.lat.lag,
-                                             FUN = calculate_distance_in_meters_between_coordinates)
+    data_processed$distance_meters_successive <- mapply(lon_a = data_processed$location.long,
+                                                        lat_a = data_processed$location.lat,
+                                                        lon_b = data_processed$location.long.lag,
+                                                        lat_b = data_processed$location.lat.lag,
+                                                        FUN = calculate_distance_in_meters_between_coordinates)
     
     # drop rows with missing distances
     data_processed <- data_processed %>% 
-      filter(!is.na(distance_meters))
+      filter(!is.na(distance_meters_successive))
     
     # get max date per individual
     max_dates <- data_processed %>% 
@@ -271,11 +271,36 @@ shinyModule <- function(input, output, session, data) {
     data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps.last, data_processed$timestamps, units ="hours"))
     
     # calculate distance between given and last coordinates
-    data_processed$distance_meters_last <- mapply(lon_a = data_processed$location.long,
-                                                  lat_a = data_processed$location.lat,
-                                                  lon_b = data_processed$location.long.last,
-                                                  lat_b = data_processed$location.lat.last,
-                                                  FUN = calculate_distance_in_meters_between_coordinates)
+    # only for time period within maximum of minimum duration parameter to avoid calculating unnecessary distances
+    max_min_duration_parameter <- 240
+    data_processed_max_time_period <- data_processed %>% 
+      filter(difference_hours_last <= max_min_duration_parameter)
+    
+    data_processed_max_time_period$distance_meters_last <- mapply(lon_a = data_processed_max_time_period$location.long,
+                                                                  lat_a = data_processed_max_time_period$location.lat,
+                                                                  lon_b = data_processed_max_time_period$location.long.last,
+                                                                  lat_b = data_processed_max_time_period$location.lat.last,
+                                                                  FUN = calculate_distance_in_meters_between_coordinates)
+    
+    data_processed <- data_processed %>% 
+      filter(difference_hours_last > max_min_duration_parameter) %>% 
+      mutate(distance_meters_last = NA) %>% 
+      rbind(data_processed_max_time_period)
+    
+    # drop columns that are not needed anymore
+    columns_to_drop <- c("tag.local.identifier.lag",
+                         "location.long.lag",
+                         "location.lat.lag",
+                         "timestamps.last",
+                         "location.long.last",
+                         "location.lat.last")
+    data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
+    
+    # remove objects that are not needed anymore
+    rm(data_df,
+       individual_data,
+       last_timestamps_coordinates,
+       data_processed_max_time_period)
     
     # remove modal after data processing and notify user
     remove_modal_spinner()
@@ -356,7 +381,7 @@ shinyModule <- function(input, output, session, data) {
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
       group_by(date, tag.local.identifier) %>% 
-      summarise(daily_distance_meters = sum(distance_meters, na.rm = TRUE),
+      summarise(daily_distance_meters = sum(distance_meters_successive, na.rm = TRUE),
                 measures_per_date = n())
     
     # get individuals
