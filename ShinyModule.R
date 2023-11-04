@@ -28,48 +28,36 @@ shinyModuleUserInterface <- function(id, label) {
   # create function to insert linebreaks
   linebreaks <- function(n){HTML(strrep(br(), n))}
   
+  # create list with choices for date range dropdown
+  choices_date_range <- list("last day" = 1,
+                             "last week" = 7,
+                             "last 30 days" = 30,
+                             "last 60 days" = 60,
+                             "last 90 days" = 90,
+                             "last 180 days" = 180,
+                             "last year" = 365)
+  
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
-      column(2,
-             selectInput(ns("dropdown_individual"),
-                         "Individual:",
-                         choices = c("all")),
-             selectInput(ns("dropdown_date_range"),
-                         "Date range:",
-                         choices = list("last day" = 1,
-                                        "last week" = 7,
-                                        "last 30 days" = 30,
-                                        "last 60 days" = 60,
-                                        "last 90 days" = 90,
-                                        "last 180 days" = 180,
-                                        "last year" = 365),
-                         selected = c("last 180 days" = 180)),
-             numericInput(ns("max_diameter"),
-                         "Max. diameter (m):",
-                         100,
-                         min = 1,
-                         max = 100000),
-             numericInput(ns("min_duration"),
-                         "Min. duration (h):",
-                         24,
-                         min = 1,
-                         max = 240),
-	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
-	     downloadButton(ns("download_table"), "Download table"),
-	     linebreaks(2),
-	     actionButton(ns("about_button"), "Show app info")),
-      column(10, dataTableOutput(ns("movement_summary")))
-    ),
+      column(2, selectInput(ns("dropdown_individual"), "Individual:", choices = c("all"))),
+      column(2, selectInput(ns("dropdown_date_range"), "Date range:", choices = choices_date_range, selected = c("last 180 days" = 180))),
+      column(2, numericInput(ns("max_diameter"), "Max. diameter (m):", 100, min = 1, max = 100000)),
+      column(2, numericInput(ns("min_duration"), "Min. duration (h):", 24, min = 1, max = 240)),
+      column(2, linebreaks(1), downloadButton(ns("download_table"), "Download table")),
+      column(2, linebreaks(1), actionButton(ns("about_button"), "Show app info"))
+      ),
     fluidRow(
-      column(2),
-      column(6, leafletOutput(ns("map"))),
-      column(4, plotlyOutput(ns("time_series")))
+      column(12, dataTableOutput(ns("movement_summary")))
+      ),
+    fluidRow(
+      column(7, checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE), leafletOutput(ns("map"))),
+      column(5, linebreaks(2), plotlyOutput(ns("time_series")))
+      )
     )
-  )
-}
+  }
 
 
 
