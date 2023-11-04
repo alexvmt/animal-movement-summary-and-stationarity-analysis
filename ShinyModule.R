@@ -136,6 +136,42 @@ shinyModule <- function(input, output, session, data) {
     
   })
   
+  # ensure that max diameter is within limits
+  observe({
+    
+    if (input$max_diameter > 100000 || input$max_diameter < 1) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p("Input value for max. diameter exceeds limits (min: 1; max: 100000). Reset to default.", style = "font-size:16px"),
+          footer = modalButton("Close"))
+        )
+      
+      updateNumericInput(session, "max_diameter", value = 100)
+      
+    }
+    
+  })
+  
+  # ensure that min duration is within limits
+  observe({
+    
+    if (input$min_duration > 240 || input$min_duration < 1) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p("Input value for min. duration exceeds limits (min: 1; max: 240). Reset to default.", style = "font-size:16px"),
+          footer = modalButton("Close"))
+      )
+      
+      updateNumericInput(session, "min_duration", value = 24)
+      
+    }
+    
+  })
+  
   
   
   ##### process loaded data
