@@ -24,36 +24,40 @@ library(shinybusy)
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
+  
+  # create function to insert linebreaks
+  linebreaks <- function(n){HTML(strrep(br(), n))}
+  
+  # create list with choices for date range dropdown
+  choices_date_range <- list("last day" = 1,
+                             "last week" = 7,
+                             "last 30 days" = 30,
+                             "last 60 days" = 60,
+                             "last 90 days" = 90,
+                             "last 180 days" = 180,
+                             "last year" = 365)
+  
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
-      column(2,
-             selectInput(ns("dropdown_individual"),
-                         "Individual:",
-                         choices = c("all")),
-             selectInput(ns("dropdown_date_range"),
-                         "Date range:",
-                         choices = list("last day" = 1,
-                                        "last week" = 7,
-                                        "last 30 days" = 30,
-                                        "last 60 days" = 60,
-                                        "last 90 days" = 90,
-                                        "last 180 days" = 180,
-                                        "last year" = 365),
-                         selected = c("last 180 days" = 180)),
-	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
-             actionButton(ns("about_button"), "Show app info")),
-      column(10, dataTableOutput(ns("movement_summary")))
-    ),
+      column(2, selectInput(ns("dropdown_individual"), "Individual:", choices = c("all"))),
+      column(2, selectInput(ns("dropdown_date_range"), "Date range:", choices = choices_date_range, selected = c("last 180 days" = 180))),
+      column(2, numericInput(ns("max_diameter"), "Max. diameter (m):", 100, min = 1, max = 100000)),
+      column(2, numericInput(ns("min_duration"), "Min. duration (h):", 24, min = 1, max = 240)),
+      column(2, linebreaks(1), downloadButton(ns("download_table"), "Download table")),
+      column(2, linebreaks(1), actionButton(ns("about_button"), "Show app info"))
+      ),
     fluidRow(
-      column(2),
-      column(6, leafletOutput(ns("map"))),
-      column(4, plotlyOutput(ns("time_series")))
+      column(12, dataTableOutput(ns("movement_summary")))
+      ),
+    fluidRow(
+      column(7, checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE), leafletOutput(ns("map"))),
+      column(5, linebreaks(2), plotlyOutput(ns("time_series")))
+      )
     )
-  )
-}
+  }
 
 
 
@@ -117,6 +121,42 @@ shinyModule <- function(input, output, session, data) {
     
     # remove modal after data loading
     removeModal()
+    
+  })
+  
+  # ensure that max diameter is within limits
+  observe({
+    
+    if (input$max_diameter > 100000 || input$max_diameter < 1) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p("Input value for max. diameter exceeds limits (min: 1; max: 100000). Reset to default.", style = "font-size:16px"),
+          footer = modalButton("Close"))
+        )
+      
+      updateNumericInput(session, "max_diameter", value = 100)
+      
+    }
+    
+  })
+  
+  # ensure that min duration is within limits
+  observe({
+    
+    if (input$min_duration > 240 || input$min_duration < 1) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p("Input value for min. duration exceeds limits (min: 1; max: 240). Reset to default.", style = "font-size:16px"),
+          footer = modalButton("Close"))
+      )
+      
+      updateNumericInput(session, "min_duration", value = 24)
+      
+    }
     
   })
   
@@ -212,32 +252,114 @@ shinyModule <- function(input, output, session, data) {
                                               data_processed$location.lat.lag,
                                               NA)
     
-    # calculate distance between two location measurements
+    # create function to calculate distance between coordinates
     calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
       if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
+      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distVincentyEllipsoid)
     }
     
-    data_processed$distance_meters <- mapply(lon_a = data_processed$location.long,
-                                             lat_a = data_processed$location.lat,
-                                             lon_b = data_processed$location.long.lag,
-                                             lat_b = data_processed$location.lat.lag,
-                                             FUN = calculate_distance_in_meters_between_coordinates)
+    # calculate distance between two successive coordinates
+    data_processed$distance_meters_successive <- mapply(lon_a = data_processed$location.long,
+                                                        lat_a = data_processed$location.lat,
+                                                        lon_b = data_processed$location.long.lag,
+                                                        lat_b = data_processed$location.lat.lag,
+                                                        FUN = calculate_distance_in_meters_between_coordinates)
     
     # drop rows with missing distances
     data_processed <- data_processed %>% 
-      filter(!is.na(distance_meters))
+      filter(!is.na(distance_meters_successive))
     
     # get max date per individual
     max_dates <- data_processed %>% 
       group_by(tag.local.identifier) %>% 
       summarise(max_date = max(date))
     
+    # get last timestamp and coordinates per individual
+    last_timestamps_coordinates <- data_processed %>% 
+      group_by(tag.local.identifier) %>% 
+      arrange(timestamps) %>% 
+      filter(row_number() == n()) %>% 
+      rename(timestamps.last = timestamps,
+             location.long.last = location.long,
+             location.lat.last = location.lat) %>% 
+      select(tag.local.identifier,
+             timestamps.last,
+             location.long.last,
+             location.lat.last)
+    
+    # join data processed and last timestamps and coordinates
+    data_processed <- data_processed %>% 
+      left_join(last_timestamps_coordinates, by = "tag.local.identifier")
+    
+    # calculate difference between given and last timestamp
+    data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps.last, data_processed$timestamps, units ="hours"))
+    
+    # calculate distance between given and last coordinates
+    # only for time period within maximum of minimum duration parameter to avoid calculating unnecessary distances
+    max_min_duration_parameter <- 240
+    data_processed_max_time_period <- data_processed %>% 
+      filter(difference_hours_last <= max_min_duration_parameter)
+    
+    data_processed_max_time_period$distance_meters_last <- mapply(lon_a = data_processed_max_time_period$location.long,
+                                                                  lat_a = data_processed_max_time_period$location.lat,
+                                                                  lon_b = data_processed_max_time_period$location.long.last,
+                                                                  lat_b = data_processed_max_time_period$location.lat.last,
+                                                                  FUN = calculate_distance_in_meters_between_coordinates)
+    
+    data_processed <- data_processed %>% 
+      filter(difference_hours_last > max_min_duration_parameter) %>% 
+      mutate(distance_meters_last = NA) %>% 
+      rbind(data_processed_max_time_period)
+    
+    # drop columns that are not needed anymore
+    columns_to_drop <- c("tag.local.identifier.lag",
+                         "location.long.lag",
+                         "location.lat.lag",
+                         "timestamps.last",
+                         "location.long.last",
+                         "location.lat.last")
+    data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
+    
+    # remove objects that are not needed anymore
+    rm(data_df,
+       individual_data,
+       last_timestamps_coordinates,
+       data_processed_max_time_period)
+    
     # remove modal after data processing and notify user
     remove_modal_spinner()
     notify_success("Processing data and calculating distances complete.")
     
     list(data_processed = data_processed, max_dates = max_dates)
+    
+  })
+  
+  
+  
+  ##### check individuals for stationarity
+  rctv_stationary_individuals <- reactive({
+    
+    # load reactive data
+    data_processed <- rctv_data_processed()$data_processed
+    
+    # get max diameter
+    max_diameter <- as.numeric(input$max_diameter)
+    
+    # get min duration
+    min_duration <- as.numeric(input$min_duration)
+    
+    # get non-stationary individuals if there are any
+    non_stationary_individuals <- data_processed %>% 
+      filter((difference_hours_last <= min_duration) & (distance_meters_last > max_diameter)) %>% 
+      distinct(tag.local.identifier)
+    
+    # get stationary individuals if there are any
+    stationary_individuals <- data_processed %>% 
+      distinct(tag.local.identifier) %>% 
+      anti_join(non_stationary_individuals, by = "tag.local.identifier") %>% 
+      mutate(stationary = "yes")
+    
+    stationary_individuals
     
   })
   
@@ -283,7 +405,7 @@ shinyModule <- function(input, output, session, data) {
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
       group_by(date, tag.local.identifier) %>% 
-      summarise(daily_distance_meters = sum(distance_meters, na.rm = TRUE),
+      summarise(daily_distance_meters = sum(distance_meters_successive, na.rm = TRUE),
                 measures_per_date = n())
     
     # get individuals
@@ -329,7 +451,7 @@ shinyModule <- function(input, output, session, data) {
     # plot time series for selected individual
     p <- plot_ly(as.data.frame(data_to_plot),
                  x = ~date,
-                 y = ~daily_distance_meters,
+                 y = ~daily_distance_meters / 1000,
                  type = "scatter",
                  mode = "lines",
                  name = individual) %>% 
@@ -338,7 +460,9 @@ shinyModule <- function(input, output, session, data) {
                            xanchor = "center",
                            x = 0.5,
                            y = 1),
-             title = "Do the last distances moved look anomalous to you?")
+             title = "Do the last distances moved look anomalous to you?",
+             yaxis = list(title = "Daily distance (km)"),
+             xaxis = list(title = "Date"))
     
     p
     
@@ -478,6 +602,7 @@ shinyModule <- function(input, output, session, data) {
     # load reactive data
     data_aggregated <- rctv_data_aggregated()$data_aggregated
     individuals <- rctv_data_aggregated()$individuals
+    stationary_individuals <- rctv_stationary_individuals()
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual",
@@ -485,9 +610,8 @@ shinyModule <- function(input, output, session, data) {
                                   "end date",
                                   "#days w measures",
                                   "#days w/o measures",
-                                  "last below avg.",
-                                  "total distance (m)",
-                                  "avg. distance (m)")
+                                  "total distance (km)",
+                                  "median distance (km)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
@@ -497,55 +621,80 @@ shinyModule <- function(input, output, session, data) {
       # filter data based on individual
       individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
       
-      # calculate number of missing days
-      missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
-      missing_days <- ifelse(missing_days < 0, 0, missing_days)
+      # get start and end date
+      start_date <- min(individual_data_aggregated$date)
+      end_date <- max(individual_data_aggregated$date)
       
-      # check whether last distance is below average
-      avg_distance <- mean(individual_data_aggregated$daily_distance_meters)
-      sd_distance <- sd(individual_data_aggregated$daily_distance_meters)
-      min_date <- min(individual_data_aggregated$date)
-      max_date <- max(individual_data_aggregated$date)
-      meters_last <- individual_data_aggregated[individual_data_aggregated$date == max_date, "daily_distance_meters"] 
-      below_last <- ifelse(meters_last < avg_distance - (1.5 * sd_distance), "yes", "no")
+      # get number of days with and without measures
+      days_with_measures <- dim(individual_data_aggregated)[1]
+      days_without_measures <- as.numeric(input$dropdown_date_range) - days_with_measures
+      days_without_measures <- ifelse(days_without_measures < 0, 0, days_without_measures)
+      
+      # get total and median distance
+      total_distance <- sum(individual_data_aggregated$daily_distance_meters)
+      median_distance <- median(individual_data_aggregated$daily_distance_meters)
 
       # store values
       individual_movement_summary <- c(individual,
-                                       as.character(min_date),
-                                       as.character(max_date),
-                                       dim(individual_data_aggregated)[1],
-                                       missing_days,
-                                       below_last,
-                                       round(sum(individual_data_aggregated$daily_distance_meters), 0),
-                                       round(avg_distance, 0))
+                                       as.character(start_date),
+                                       as.character(end_date),
+                                       days_with_measures,
+                                       days_without_measures,
+                                       round(total_distance / 1000, 2),
+                                       round(median_distance / 1000, 2))
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
     
-    # calculate average measures per day and variance
+    # calculate average number of measures per day and variance
     measures_aggregated <- data_aggregated %>% 
       group_by(tag.local.identifier) %>% 
       summarise(avg_measures = round(mean(measures_per_date), 1),
-                var_measures = round(var(measures_per_date), 1))
+                var_measures = round(var(measures_per_date), 1)) %>% 
+      rename(individual = tag.local.identifier)
 
-    # join avg and var movement
+    # join avg and var measures
     movement_summary <- movement_summary %>% 
-      left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
+      left_join(measures_aggregated, by = "individual")
     colnames(movement_summary) <- c(head(colnames(movement_summary), -2),
                                     "avg. measures",
                                     "var. measures")
 
     # convert relevant columns to numeric
-    movement_summary[ , 4:5] <- apply(movement_summary[ , 4:5], 2, as.numeric)
-    movement_summary[ , 7:10] <- apply(movement_summary[ , 7:10], 2, as.numeric)
-
+    movement_summary[ , 4:9] <- apply(movement_summary[ , 4:9], 2, as.numeric)
+    
+    # join stationary individuals if there are any
+    if (nrow(stationary_individuals) > 0) {
+      
+      movement_summary <- movement_summary %>% 
+        left_join(stationary_individuals, by = join_by("individual" == "tag.local.identifier")) %>% 
+        mutate(stationary = ifelse(is.na(stationary), "no", stationary))
+      
+    } else {
+      
+      movement_summary <- cbind(movement_summary, stationary = "no")
+      
+    }
+    
     movement_summary
     
   })
   
   output$movement_summary <- renderDataTable({ datatable(rctv_movement_summary()) })
+  
+  
+  
+  ##### download table
+  output$download_table <- downloadHandler(
+    
+    filename = function(){paste0("movement_summary_last_", as.character(input$dropdown_date_range), "_days.csv")},
+    content = function(fname){write.csv(rctv_movement_summary(), file = fname, row.names = FALSE)}
+    
+    )
+  
+  
   
   # return unmodified input data
   return(reactive({ current() }))
