@@ -168,6 +168,9 @@ shinyModule <- function(input, output, session, data) {
     # show modal during data processing
     show_modal_spinner(text = "Processing data and calculating distances. This may take a moment. Please wait.")
     
+    # ensure that data is in epsg 4326
+    data <- spTransform(data, CRSobj="+init=epsg:4326")
+    
     # extract relevant data from move object and create dataframe
     individuals <- trackId(data)
     timestamps <- timestamps(data)
