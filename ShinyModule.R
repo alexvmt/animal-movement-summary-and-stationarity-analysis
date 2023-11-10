@@ -113,9 +113,9 @@ shinyModule <- function(input, output, session, data) {
     
     # wait until the data is loaded
     if (is.null(data)) return()
-    data_df <- as.data.frame(data)
-    keys <- c(sort(as.character(data_df$tag.local.identifier)), "all")
-    values <- c(sort(as.character(data_df$tag.local.identifier)), "all")
+    individuals <- trackId(data)
+    keys <- c(sort(as.character(individuals)), "all")
+    values <- c(sort(as.character(individuals)), "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all"))
     
@@ -168,26 +168,21 @@ shinyModule <- function(input, output, session, data) {
     # show modal during data processing
     show_modal_spinner(text = "Processing data and calculating distances. This may take a moment. Please wait.")
     
-    # transform move object to dataframe
-    data_df <- as.data.frame(data)
+    # extract relevant data from move object and create dataframe
+    individuals <- trackId(data)
+    timestamps <- timestamps(data)
+    long <- coordinates(data)[, 1]
+    lat <- coordinates(data)[, 2]
+    data_df <- data.frame(individuals, timestamps, long, lat)
     
     # reset row names
     row.names(data_df) <- NULL
     
-    # cast tag.local.identifier to character
-    data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
-    
-    # make sure right coordinates are used
-    if ("coords.x1" %in% names(data_df)) {
-      data_df$location.long <- data_df$coords.x1
-    }
-    
-    if ("coords.x2" %in% names(data_df)) {
-      data_df$location.lat <- data_df$coords.x2
-    }
+    # cast individuals to character
+    data_df$individuals <- as.character(data_df$individuals)
     
     # get individuals
-    individuals <- unique(data_df$tag.local.identifier)
+    individuals <- unique(data_df$individuals)
     
     # create year and date columns
     data_df$date <- as.Date(format(data_df$timestamps, format = "%Y-%m-%d"))
@@ -195,10 +190,10 @@ shinyModule <- function(input, output, session, data) {
     
     # create empty dataframe to store processed individual data
     data_processed <- data.frame(matrix(ncol = 5, nrow = 0))
-    processed_data_columns <- c("tag.local.identifier",
+    processed_data_columns <- c("individuals",
                                 "timestamps",
-                                "location.long",
-                                "location.lat",
+                                "long",
+                                "lat",
                                 "date")
     colnames(data_processed) <- processed_data_columns
     
@@ -209,7 +204,7 @@ shinyModule <- function(input, output, session, data) {
     for (individual in individuals) {
       
       # filter data based on individual
-      individual_data <- data_df[data_df$tag.local.identifier == individual, ]
+      individual_data <- data_df[data_df$individuals == individual, ]
       
       # subset data to relevant columns
       individual_data <- individual_data[ , processed_data_columns]
@@ -218,7 +213,7 @@ shinyModule <- function(input, output, session, data) {
       individual_data <- na.omit(individual_data)
       
       # drop duplicated rows
-      individual_data <- individual_data[!duplicated(individual_data[c("tag.local.identifier", "timestamps")]), ]
+      individual_data <- individual_data[!duplicated(individual_data[c("individuals", "timestamps")]), ]
       
       # extract max and min date
       max_date <- max(individual_data$date)
@@ -233,36 +228,36 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # order data
-    data_processed <- data_processed[order(data_processed$tag.local.identifier, data_processed$timestamps), ]
+    data_processed <- data_processed[order(data_processed$individuals, data_processed$timestamps), ]
     
     # create lag columns
-    data_processed$tag.local.identifier.lag <- c(NA, head(data_processed$tag.local.identifier, -1))
-    data_processed$location.long.lag <- c(NA, head(data_processed$location.long, -1))
-    data_processed$location.lat.lag <- c(NA, head(data_processed$location.lat, -1))
+    data_processed$individuals_lag <- c(NA, head(data_processed$individuals, -1))
+    data_processed$long_lag <- c(NA, head(data_processed$long, -1))
+    data_processed$lat_lag <- c(NA, head(data_processed$lat, -1))
     
-    data_processed$tag.local.identifier.lag <- ifelse(data_processed$tag.local.identifier == data_processed$tag.local.identifier.lag,
-                                                      data_processed$tag.local.identifier.lag,
-                                                      NA)
+    data_processed$individuals_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                             data_processed$individuals_lag,
+                                             NA)
     
-    data_processed$location.long.lag <- ifelse(data_processed$tag.local.identifier == data_processed$tag.local.identifier.lag,
-                                               data_processed$location.long.lag,
-                                               NA)
+    data_processed$long_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                      data_processed$long_lag,
+                                      NA)
     
-    data_processed$location.lat.lag <- ifelse(data_processed$tag.local.identifier == data_processed$tag.local.identifier.lag,
-                                              data_processed$location.lat.lag,
-                                              NA)
+    data_processed$lat_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                     data_processed$lat_lag,
+                                     NA)
     
     # create function to calculate distance between coordinates
-    calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
-      if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distVincentyEllipsoid)
+    calculate_distance_in_meters_between_coordinates <- function(long_a, lat_a, long_b, lat_b) {
+      if(anyNA(c(long_a, lat_a, long_b, lat_b))) return(NA)
+      distm(c(long_a, lat_a), c(long_b, lat_b), fun = distVincentyEllipsoid)
     }
     
     # calculate distance between two successive coordinates
-    data_processed$distance_meters_successive <- mapply(lon_a = data_processed$location.long,
-                                                        lat_a = data_processed$location.lat,
-                                                        lon_b = data_processed$location.long.lag,
-                                                        lat_b = data_processed$location.lat.lag,
+    data_processed$distance_meters_successive <- mapply(long_a = data_processed$long,
+                                                        lat_a = data_processed$lat,
+                                                        long_b = data_processed$long_lag,
+                                                        lat_b = data_processed$lat_lag,
                                                         FUN = calculate_distance_in_meters_between_coordinates)
     
     # drop rows with missing distances
@@ -271,28 +266,28 @@ shinyModule <- function(input, output, session, data) {
     
     # get max date per individual
     max_dates <- data_processed %>% 
-      group_by(tag.local.identifier) %>% 
+      group_by(individuals) %>% 
       summarise(max_date = max(date))
     
     # get last timestamp and coordinates per individual
     last_timestamps_coordinates <- data_processed %>% 
-      group_by(tag.local.identifier) %>% 
+      group_by(individuals) %>% 
       arrange(timestamps) %>% 
       filter(row_number() == n()) %>% 
-      rename(timestamps.last = timestamps,
-             location.long.last = location.long,
-             location.lat.last = location.lat) %>% 
-      select(tag.local.identifier,
-             timestamps.last,
-             location.long.last,
-             location.lat.last)
+      rename(timestamps_last = timestamps,
+             long_last = long,
+             lat_last = lat) %>% 
+      select(individuals,
+             timestamps_last,
+             long_last,
+             lat_last)
     
     # join data processed and last timestamps and coordinates
     data_processed <- data_processed %>% 
-      left_join(last_timestamps_coordinates, by = "tag.local.identifier")
+      left_join(last_timestamps_coordinates, by = "individuals")
     
     # calculate difference between given and last timestamp
-    data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps.last, data_processed$timestamps, units ="hours"))
+    data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps_last, data_processed$timestamps, units ="hours"))
     
     # calculate distance between given and last coordinates
     # only for time period within maximum of minimum duration parameter to avoid calculating unnecessary distances
@@ -300,10 +295,10 @@ shinyModule <- function(input, output, session, data) {
     data_processed_max_time_period <- data_processed %>% 
       filter(difference_hours_last <= max_min_duration_parameter)
     
-    data_processed_max_time_period$distance_meters_last <- mapply(lon_a = data_processed_max_time_period$location.long,
-                                                                  lat_a = data_processed_max_time_period$location.lat,
-                                                                  lon_b = data_processed_max_time_period$location.long.last,
-                                                                  lat_b = data_processed_max_time_period$location.lat.last,
+    data_processed_max_time_period$distance_meters_last <- mapply(long_a = data_processed_max_time_period$long,
+                                                                  lat_a = data_processed_max_time_period$lat,
+                                                                  long_b = data_processed_max_time_period$long_last,
+                                                                  lat_b = data_processed_max_time_period$lat_last,
                                                                   FUN = calculate_distance_in_meters_between_coordinates)
     
     data_processed <- data_processed %>% 
@@ -312,12 +307,12 @@ shinyModule <- function(input, output, session, data) {
       rbind(data_processed_max_time_period)
     
     # drop columns that are not needed anymore
-    columns_to_drop <- c("tag.local.identifier.lag",
-                         "location.long.lag",
-                         "location.lat.lag",
-                         "timestamps.last",
-                         "location.long.last",
-                         "location.lat.last")
+    columns_to_drop <- c("individuals_lag",
+                         "long_lag",
+                         "lat_lag",
+                         "timestamps_last",
+                         "long_last",
+                         "lat_last")
     data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
     
     # remove objects that are not needed anymore
@@ -351,12 +346,12 @@ shinyModule <- function(input, output, session, data) {
     # get non-stationary individuals if there are any
     non_stationary_individuals <- data_processed %>% 
       filter((difference_hours_last <= min_duration) & (distance_meters_last > max_diameter)) %>% 
-      distinct(tag.local.identifier)
+      distinct(individuals)
     
     # get stationary individuals if there are any
     stationary_individuals <- data_processed %>% 
-      distinct(tag.local.identifier) %>% 
-      anti_join(non_stationary_individuals, by = "tag.local.identifier") %>% 
+      distinct(individuals) %>% 
+      anti_join(non_stationary_individuals, by = "individuals") %>% 
       mutate(stationary = "yes")
     
     stationary_individuals
@@ -380,11 +375,11 @@ shinyModule <- function(input, output, session, data) {
     
     # filter data according to selected date range
     data_processed_filtered <- data_processed %>% 
-      left_join(max_dates, by = "tag.local.identifier") %>% 
+      left_join(max_dates, by = "individuals") %>% 
       filter(date >= max_date - last_n_days)
     
     # get individuals
-    individuals <- unique(data_processed_filtered$tag.local.identifier)
+    individuals <- unique(data_processed_filtered$individuals)
     
     # remove modal after data filtering and notify user
     remove_modal_spinner()
@@ -404,12 +399,12 @@ shinyModule <- function(input, output, session, data) {
     
     # aggregate distances by date and individual
     data_aggregated <- data_processed_filtered %>% 
-      group_by(date, tag.local.identifier) %>% 
+      group_by(date, individuals) %>% 
       summarise(daily_distance_meters = sum(distance_meters_successive, na.rm = TRUE),
                 measures_per_date = n())
     
     # get individuals
-    individuals <- unique(data_aggregated$tag.local.identifier)
+    individuals <- unique(data_aggregated$individuals)
     
     list(data_aggregated = data_aggregated, individuals = individuals)
     
@@ -425,13 +420,13 @@ shinyModule <- function(input, output, session, data) {
     
     # select individual to plot data for
     if (input$dropdown_individual == "all") {
-      individual <- data_aggregated$tag.local.identifier[1]
+      individual <- data_aggregated$individuals[1]
     } else {
       individual <- input$dropdown_individual
     }
     
     # get data to plot
-    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
+    data_to_plot <- data_aggregated[data_aggregated$individuals == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
 
@@ -495,11 +490,11 @@ shinyModule <- function(input, output, session, data) {
     if (input$dropdown_individual == "all") {
       # do nothing and proceed
     } else {
-      data_processed_filtered <- data_processed_filtered[data_processed_filtered$tag.local.identifier == input$dropdown_individual, ]
+      data_processed_filtered <- data_processed_filtered[data_processed_filtered$individuals == input$dropdown_individual, ]
     }
     
     # get remaining individual(s)
-    remaining_individuals <- unique(data_processed_filtered$tag.local.identifier)
+    remaining_individuals <- unique(data_processed_filtered$individuals)
     length_remaining_individuals <- length(remaining_individuals)
     
     # limit number of shown tracks on map if needed
@@ -526,16 +521,16 @@ shinyModule <- function(input, output, session, data) {
         
         # add lines and points
         map <- map %>% 
-          addPolylines(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
-                       lat = ~location.lat,
-                       lng = ~location.long,
+          addPolylines(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+                       lng = ~long,
+                       lat = ~lat,
                        color = individual_colors[i],
                        opacity = line_opacity,
                        weight = line_weight,
                        group = "Lines") %>% 
-          addCircles(data = data_processed_filtered[data_processed_filtered$tag.local.identifier == remaining_individuals[i], ],
-                     lat = ~location.lat,
-                     lng = ~location.long,
+          addCircles(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+                     lng = ~long,
+                     lat = ~lat,
                      color = individual_colors[i],
                      opacity = circle_opacity,
                      fillOpacity = circle_fill_opacity,
@@ -560,13 +555,13 @@ shinyModule <- function(input, output, session, data) {
       # get index of selected individual
       selected_index <- which(individuals == remaining_individuals)
       
-      # get first and last lon, lat and time
-      first_lon <- head(data_processed_filtered, 1)$location.long
-      first_lat <- head(data_processed_filtered, 1)$location.lat
+      # get first and last long, lat and time
+      first_long <- head(data_processed_filtered, 1)$long
+      first_lat <- head(data_processed_filtered, 1)$lat
       first_time <- head(data_processed_filtered, 1)$timestamps
       
-      last_lon <- tail(data_processed_filtered, 1)$location.long
-      last_lat <- tail(data_processed_filtered, 1)$location.lat
+      last_long <- tail(data_processed_filtered, 1)$long
+      last_lat <- tail(data_processed_filtered, 1)$lat
       last_time <- tail(data_processed_filtered, 1)$timestamps
       
       # create start and end icons
@@ -580,26 +575,26 @@ shinyModule <- function(input, output, session, data) {
       # add lines, points and markers
       map <- map %>% 
         addPolylines(data = data_processed_filtered,
-                     lat = ~location.lat,
-                     lng = ~location.long,
+                     lng = ~long,
+                     lat = ~lat,
                      color = individual_colors[selected_index],
                      opacity = line_opacity,
                      weight = line_weight,
                      group = "Lines") %>% 
         addCircleMarkers(data = data_processed_filtered,
-                         lat = ~location.lat,
-                         lng = ~location.long,
+                         lng = ~long,
+                         lat = ~lat,
                          color = individual_colors[selected_index],
                          opacity = circle_opacity,
                          fillOpacity = circle_fill_opacity,
                          label = ~timestamps,
                          clusterOptions = markerClusterOptions(),
                          group = "Points") %>% 
-        addAwesomeMarkers(lng = first_lon,
+        addAwesomeMarkers(lng = first_long,
                           lat = first_lat,
                           icon = start_icon,
                           label = paste0("First location at: ", first_time)) %>% 
-        addAwesomeMarkers(lng = last_lon,
+        addAwesomeMarkers(lng = last_long,
                           lat = last_lat,
                           icon = end_icon,
                           label = paste0("Last location at: ", last_time))
@@ -644,7 +639,7 @@ shinyModule <- function(input, output, session, data) {
     for (individual in individuals) {
       
       # filter data based on individual
-      individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
+      individual_data_aggregated <- data_aggregated[data_aggregated$individuals == individual, ]
       
       # get start and end date
       start_date <- min(individual_data_aggregated$date)
@@ -675,10 +670,10 @@ shinyModule <- function(input, output, session, data) {
     
     # calculate average number of measures per day and variance
     measures_aggregated <- data_aggregated %>% 
-      group_by(tag.local.identifier) %>% 
+      group_by(individuals) %>% 
       summarise(avg_measures = round(mean(measures_per_date), 1),
                 var_measures = round(var(measures_per_date), 1)) %>% 
-      rename(individual = tag.local.identifier)
+      rename(individual = individuals)
 
     # join avg and var measures
     movement_summary <- movement_summary %>% 
@@ -694,7 +689,7 @@ shinyModule <- function(input, output, session, data) {
     if (nrow(stationary_individuals) > 0) {
       
       movement_summary <- movement_summary %>% 
-        left_join(stationary_individuals, by = join_by("individual" == "tag.local.identifier")) %>% 
+        left_join(stationary_individuals, by = join_by("individual" == "individuals")) %>% 
         mutate(stationary = ifelse(is.na(stationary), "no", stationary))
       
     } else {
