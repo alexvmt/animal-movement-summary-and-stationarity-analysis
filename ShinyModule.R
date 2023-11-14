@@ -169,7 +169,7 @@ shinyModule <- function(input, output, session, data) {
     show_modal_spinner(text = "Processing data and calculating distances. This may take a moment. Please wait.")
     
     # ensure that data is in epsg 4326
-    data <- spTransform(data, CRSobj="+init=epsg:4326")
+    data <- spTransform(data, CRSobj = "+init=epsg:4326")
     
     # extract relevant data from move object and create dataframe
     individuals <- trackId(data)
@@ -185,7 +185,7 @@ shinyModule <- function(input, output, session, data) {
     data_df$individuals <- as.character(data_df$individuals)
     
     # get individuals
-    individuals <- unique(data_df$individuals)
+    individuals <- sort(unique(data_df$individuals))
     
     # create year and date columns
     data_df$date <- as.Date(format(data_df$timestamps, format = "%Y-%m-%d"))
@@ -318,6 +318,58 @@ shinyModule <- function(input, output, session, data) {
                          "lat_last")
     data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
     
+    # create reduced version of data to be plotted if all individuals are selected if amount of data exceeds limit
+    if (nrow(data_processed) > 100000) {
+      
+      # get first location per individual
+      locations_first <- data_processed %>% 
+        group_by(individuals) %>% 
+        arrange(individuals, timestamps) %>% 
+        filter(row_number() == 1) %>% 
+        select(individuals,
+               timestamps,
+               long,
+               lat)
+      
+      # get one location per day and individual for last year without last 30 days
+      locations_last_year_without_last_30_days <- data_processed %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date < max_date - 30) %>% 
+        group_by(individuals, date) %>% 
+        summarise(long = mean(long),
+                  lat = mean(lat),
+                  .groups = "keep") %>% 
+        rename(timestamps = date) %>% 
+        group_by(individuals) %>% 
+        slice(-1)
+      
+      # get all locations per individual for last 30 days because this period is the most interesting considering stationarity
+      locations_last_30_days <- data_processed %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date >= max_date - 30) %>% 
+        select(individuals,
+               timestamps,
+               long,
+               lat)
+      
+      data_processed_reduced <- locations_first %>% 
+        rbind(locations_last_year_without_last_30_days) %>% 
+        rbind(locations_last_30_days) %>% 
+        mutate(date = as.Date(format(timestamps, format = "%Y-%m-%d"))) %>% 
+        arrange(individuals, timestamps)
+      
+    } else {
+      
+      data_processed_reduced_columns <- c("individuals",
+                                          "timestamps",
+                                          "long",
+                                          "lat",
+                                          "date")
+      data_processed_reduced <- data.frame(matrix(ncol = length(data_processed_reduced_columns), nrow = 0))
+      colnames(data_processed_reduced) <- data_processed_reduced_columns
+      
+    }
+    
     # remove objects that are not needed anymore
     rm(data_df,
        individual_data,
@@ -328,7 +380,29 @@ shinyModule <- function(input, output, session, data) {
     remove_modal_spinner()
     notify_success("Processing data and calculating distances complete.")
     
-    list(data_processed = data_processed, max_dates = max_dates)
+    # show warning when loaded data exceeds certain amount of observations
+    if (nrow(data_processed) > 100000) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p("The data you loaded exceeds 100000 observations.
+            To keep the app performant,
+            the amount of data displayed on the map when all individuals are selected is reduced as follows:
+            Keep the first location per individual and all locations within the last 30 days per individual;
+            Calculate the mean location per day for the last year up to the last 30 days for each individual.
+            Should a single individual exceed 100000 observations,
+            the same procedure is applied when the respective individual is selected.
+            The statistics table and time series plot are not affected by the automatic data reduction.
+            Please consider loading less data to avoid triggering the automatic data reduction.", style = "font-size:16px"),
+          footer = modalButton("Close"))
+      )
+      
+    }
+    
+    list(data_processed = data_processed,
+         data_processed_reduced = data_processed_reduced,
+         max_dates = max_dates)
     
   })
   
@@ -366,11 +440,9 @@ shinyModule <- function(input, output, session, data) {
   ##### filter processed data
   rctv_data_processed_filtered <- reactive({
     
-    # show modal during data filtering
-    show_modal_spinner(text = "Filtering data according to selected date range. This may take a moment. Please wait.")
-    
     # load reactive data
     data_processed <- rctv_data_processed()$data_processed
+    data_processed_reduced <- rctv_data_processed()$data_processed_reduced
     max_dates <- rctv_data_processed()$max_dates
     
     # get last n days
@@ -381,14 +453,24 @@ shinyModule <- function(input, output, session, data) {
       left_join(max_dates, by = "individuals") %>% 
       filter(date >= max_date - last_n_days)
     
+    if (nrow(data_processed_reduced) > 0) {
+      
+      data_processed_reduced_filtered <- data_processed_reduced %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date >= max_date - last_n_days)
+      
+    } else {
+      
+      data_processed_reduced_filtered <- data_processed_reduced
+      
+    }
+    
     # get individuals
-    individuals <- unique(data_processed_filtered$individuals)
+    individuals <- sort(unique(data_processed_filtered$individuals))
     
-    # remove modal after data filtering and notify user
-    remove_modal_spinner()
-    notify_success("Data filtering according to selected date range complete.")
-    
-    list(data_processed_filtered = data_processed_filtered, individuals = individuals)
+    list(data_processed_filtered = data_processed_filtered,
+         data_processed_reduced_filtered = data_processed_reduced_filtered,
+         individuals = individuals)
     
   })
   
@@ -404,12 +486,14 @@ shinyModule <- function(input, output, session, data) {
     data_aggregated <- data_processed_filtered %>% 
       group_by(date, individuals) %>% 
       summarise(daily_distance_meters = sum(distance_meters_successive, na.rm = TRUE),
-                measures_per_date = n())
+                measures_per_date = n(),
+                .groups = "keep")
     
     # get individuals
-    individuals <- unique(data_aggregated$individuals)
+    individuals <- sort(unique(data_aggregated$individuals))
     
-    list(data_aggregated = data_aggregated, individuals = individuals)
+    list(data_aggregated = data_aggregated, 
+         individuals = individuals)
     
   })
   
@@ -475,6 +559,7 @@ shinyModule <- function(input, output, session, data) {
     
     # load reactive data
     data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
+    data_processed_reduced_filtered <- rctv_data_processed_filtered()$data_processed_reduced_filtered
     individuals <- rctv_data_processed_filtered()$individuals
     
     # set map colors and parameters
@@ -494,6 +579,7 @@ shinyModule <- function(input, output, session, data) {
       # do nothing and proceed
     } else {
       data_processed_filtered <- data_processed_filtered[data_processed_filtered$individuals == input$dropdown_individual, ]
+      data_processed_reduced_filtered <- data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == input$dropdown_individual, ]
     }
     
     # get remaining individual(s)
@@ -522,23 +608,47 @@ shinyModule <- function(input, output, session, data) {
 
       for (i in seq(along = head(remaining_individuals, n = track_limit))) {
         
-        # add lines and points
-        map <- map %>% 
-          addPolylines(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+        if (nrow(data_processed_reduced_filtered) == 0) {
+          
+          # add lines and points
+          map <- map %>% 
+            addPolylines(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+                         lng = ~long,
+                         lat = ~lat,
+                         color = individual_colors[i],
+                         opacity = line_opacity,
+                         weight = line_weight,
+                         group = "Lines") %>% 
+            addCircles(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
                        lng = ~long,
                        lat = ~lat,
                        color = individual_colors[i],
-                       opacity = line_opacity,
-                       weight = line_weight,
-                       group = "Lines") %>% 
-          addCircles(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
-                     lng = ~long,
-                     lat = ~lat,
-                     color = individual_colors[i],
-                     opacity = circle_opacity,
-                     fillOpacity = circle_fill_opacity,
-                     label = ~timestamps,
-                     group = "Points")
+                       opacity = circle_opacity,
+                       fillOpacity = circle_fill_opacity,
+                       label = ~timestamps,
+                       group = "Points")
+          
+        } else {
+          
+          # add lines and points
+          map <- map %>% 
+            addPolylines(data = data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ],
+                         lng = ~long,
+                         lat = ~lat,
+                         color = individual_colors[i],
+                         opacity = line_opacity,
+                         weight = line_weight,
+                         group = "Lines") %>% 
+            addCircles(data = data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ],
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[i],
+                       opacity = circle_opacity,
+                       fillOpacity = circle_fill_opacity,
+                       label = ~timestamps,
+                       group = "Points")
+          
+        }
       
       }
       
@@ -575,24 +685,52 @@ shinyModule <- function(input, output, session, data) {
                                library = "fa",
                                markerColor = "red")
       
-      # add lines, points and markers
+      if (nrow(data_processed_filtered) <= 100000) {
+        
+        # add lines and points
+        map <- map %>% 
+          addPolylines(data = data_processed_filtered,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[selected_index],
+                       opacity = line_opacity,
+                       weight = line_weight,
+                       group = "Lines") %>% 
+          addCircleMarkers(data = data_processed_filtered,
+                           lng = ~long,
+                           lat = ~lat,
+                           color = individual_colors[selected_index],
+                           opacity = circle_opacity,
+                           fillOpacity = circle_fill_opacity,
+                           label = ~timestamps,
+                           clusterOptions = markerClusterOptions(),
+                           group = "Points")
+        
+      } else {
+        
+        # add lines and points
+        map <- map %>% 
+          addPolylines(data = data_processed_reduced_filtered,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[selected_index],
+                       opacity = line_opacity,
+                       weight = line_weight,
+                       group = "Lines") %>% 
+          addCircleMarkers(data = data_processed_reduced_filtered,
+                           lng = ~long,
+                           lat = ~lat,
+                           color = individual_colors[selected_index],
+                           opacity = circle_opacity,
+                           fillOpacity = circle_fill_opacity,
+                           label = ~timestamps,
+                           clusterOptions = markerClusterOptions(),
+                           group = "Points")
+        
+      }
+      
+      # add markers
       map <- map %>% 
-        addPolylines(data = data_processed_filtered,
-                     lng = ~long,
-                     lat = ~lat,
-                     color = individual_colors[selected_index],
-                     opacity = line_opacity,
-                     weight = line_weight,
-                     group = "Lines") %>% 
-        addCircleMarkers(data = data_processed_filtered,
-                         lng = ~long,
-                         lat = ~lat,
-                         color = individual_colors[selected_index],
-                         opacity = circle_opacity,
-                         fillOpacity = circle_fill_opacity,
-                         label = ~timestamps,
-                         clusterOptions = markerClusterOptions(),
-                         group = "Points") %>% 
         addAwesomeMarkers(lng = first_long,
                           lat = first_lat,
                           icon = start_icon,
