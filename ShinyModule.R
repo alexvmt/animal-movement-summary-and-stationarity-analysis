@@ -17,6 +17,44 @@ library(RColorBrewer)
 library(dplyr)
 library(shinybusy)
 
+# disable scientific notation
+options(scipen = 999)
+
+# create list with choices for date range dropdown and set default choice
+choices_date_range <- list("last day" = 1,
+                           "last week" = 7,
+                           "last 30 days" = 30,
+                           "last 60 days" = 60,
+                           "last 90 days" = 90,
+                           "last 180 days" = 180,
+                           "last year" = 365)
+default_date_range <- 180
+
+# set limits and default for max diameter
+limit_lower_max_diameter <- 1
+limit_upper_max_diameter <- 100000
+default_max_diameter <- 100
+
+# set limits and default for min duration
+limit_lower_min_duration <- 1
+limit_upper_min_duration <- 240
+default_min_duration <- 24
+
+# set max number of last days to process
+last_n_days <- 365
+
+# set max number of last hours for calculating distance to last location
+max_min_duration_parameter <- 240
+
+# set limit for observations before automatic data reduction is triggered
+limit_upper_observations <- 100000
+
+# set max number of last n days to keep all locations for during automatic data reduction
+limit_upper_last_n_days_for_data_reduction <- 10
+
+# set max number of tracks to be shown on map when all individuals are selected
+fixed_track_limit <- 10
+
 
 
 ####################
@@ -28,33 +66,62 @@ shinyModuleUserInterface <- function(id, label) {
   # create function to insert linebreaks
   linebreaks <- function(n){HTML(strrep(br(), n))}
   
-  # create list with choices for date range dropdown
-  choices_date_range <- list("last day" = 1,
-                             "last week" = 7,
-                             "last 30 days" = 30,
-                             "last 60 days" = 60,
-                             "last 90 days" = 90,
-                             "last 180 days" = 180,
-                             "last year" = 365)
-  
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
     tags$style(type = "text/css", ".col-sm-9 {padding: 15px;}"), # prevent graphs from overlapping
     fluidRow(
-      column(2, selectInput(ns("dropdown_individual"), "Individual:", choices = c("all"))),
-      column(2, selectInput(ns("dropdown_date_range"), "Date range:", choices = choices_date_range, selected = c("last 180 days" = 180))),
-      column(2, numericInput(ns("max_diameter"), "Max. diameter (m):", 100, min = 1, max = 100000)),
-      column(2, numericInput(ns("min_duration"), "Min. duration (h):", 24, min = 1, max = 240)),
-      column(2, linebreaks(1), downloadButton(ns("download_table"), "Download table")),
-      column(2, linebreaks(1), actionButton(ns("about_button"), "Show app info"))
+      column(2,
+             selectInput(ns("dropdown_individual"),
+                         "Individual:",
+                         choices = c("all"))
+             ),
+      column(2,
+             selectInput(ns("dropdown_date_range"),
+                         "Date range:",
+                         choices = choices_date_range,
+                         selected = c("last 180 days" = default_date_range))
+             ),
+      column(2,
+             numericInput(ns("max_diameter"),
+                          "Max. diameter (m):",
+                          default_max_diameter,
+                          min = limit_lower_max_diameter,
+                          max = limit_upper_max_diameter)
+             ),
+      column(2,
+             numericInput(ns("min_duration"),
+                          "Min. duration (h):",
+                          default_min_duration,
+                          min = limit_lower_min_duration,
+                          max = limit_upper_min_duration)
+             ),
+      column(2,
+             linebreaks(1),
+             downloadButton(ns("download_table"),
+                            "Download table")
+             ),
+      column(2,
+             linebreaks(1),
+             actionButton(ns("about_button"),
+                          "Show app info")
+             )
       ),
     fluidRow(
-      column(12, dataTableOutput(ns("movement_summary")))
+      column(12,
+             dataTableOutput(ns("movement_summary"))
+             )
       ),
     fluidRow(
-      column(7, checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE), leafletOutput(ns("map"))),
-      column(5, linebreaks(2), plotlyOutput(ns("time_series")))
+      column(7,
+             checkboxInput(ns("checkbox_full_map"),
+                           "Limit map to 10 tracks", TRUE),
+             leafletOutput(ns("map"))
+             ),
+      column(5,
+             linebreaks(2),
+             plotlyOutput(ns("time_series"))
+             )
       )
     )
   }
@@ -127,16 +194,21 @@ shinyModule <- function(input, output, session, data) {
   # ensure that max diameter is within limits
   observe({
     
-    if (input$max_diameter > 100000 || input$max_diameter < 1) {
+    if (input$max_diameter > limit_upper_max_diameter || input$max_diameter < limit_lower_max_diameter) {
       
       showModal(
         modalDialog(
           title = strong("Warning!", style = "font-size:24px; color: red;"),
-          p("Input value for max. diameter exceeds limits (min: 1; max: 100000). Reset to default.", style = "font-size:16px"),
+          p(paste0("Input value for max. diameter exceeds limits (min: ",
+                   limit_lower_max_diameter,
+                   "; max: ",
+                   limit_upper_max_diameter,
+                   "). Reset to default."),
+            style = "font-size:16px"),
           footer = modalButton("Close"))
         )
       
-      updateNumericInput(session, "max_diameter", value = 100)
+      updateNumericInput(session, "max_diameter", value = default_max_diameter)
       
     }
     
@@ -145,16 +217,21 @@ shinyModule <- function(input, output, session, data) {
   # ensure that min duration is within limits
   observe({
     
-    if (input$min_duration > 240 || input$min_duration < 1) {
+    if (input$min_duration > limit_upper_min_duration || input$min_duration < limit_lower_min_duration) {
       
       showModal(
         modalDialog(
           title = strong("Warning!", style = "font-size:24px; color: red;"),
-          p("Input value for min. duration exceeds limits (min: 1; max: 240). Reset to default.", style = "font-size:16px"),
+          p(paste0("Input value for min. duration exceeds limits (min: ",
+                   limit_lower_min_duration,
+                   "; max: ",
+                   limit_upper_min_duration,
+                   "). Reset to default."),
+            style = "font-size:16px"),
           footer = modalButton("Close"))
       )
       
-      updateNumericInput(session, "min_duration", value = 24)
+      updateNumericInput(session, "min_duration", value = default_min_duration)
       
     }
     
@@ -166,7 +243,9 @@ shinyModule <- function(input, output, session, data) {
   rctv_data_processed <- reactive({
     
     # show modal during data processing
-    show_modal_spinner(text = "Processing data and calculating distances. This may take a moment. Please wait.")
+    show_modal_spinner(text = "Processing the input data and calculating distances between locations. This may take a moment.
+                       Rendering the map and time series for the first time may also take a couple minutes.
+                       Please wait.")
     
     # ensure that data is in epsg 4326
     data <- spTransform(data, CRSobj = "+init=epsg:4326")
@@ -199,9 +278,6 @@ shinyModule <- function(input, output, session, data) {
                                 "lat",
                                 "date")
     colnames(data_processed) <- processed_data_columns
-    
-    # set max number of last days to process
-    last_n_days <- 365
     
     # process last n days of observations per individual
     for (individual in individuals) {
@@ -294,7 +370,6 @@ shinyModule <- function(input, output, session, data) {
     
     # calculate distance between given and last coordinates
     # only for time period within maximum of minimum duration parameter to avoid calculating unnecessary distances
-    max_min_duration_parameter <- 240
     data_processed_max_time_period <- data_processed %>% 
       filter(difference_hours_last <= max_min_duration_parameter)
     
@@ -319,7 +394,7 @@ shinyModule <- function(input, output, session, data) {
     data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
     
     # create reduced version of data to be plotted if all individuals are selected if amount of data exceeds limit
-    if (nrow(data_processed) > 100000) {
+    if (nrow(data_processed) > limit_upper_observations) {
       
       # get first location per individual
       locations_first <- data_processed %>% 
@@ -331,10 +406,10 @@ shinyModule <- function(input, output, session, data) {
                long,
                lat)
       
-      # get one location per day and individual for last year without last 30 days
-      locations_last_year_without_last_30_days <- data_processed %>% 
+      # get one location per day and individual for last year without last n days
+      locations_last_year_without_last_n_days <- data_processed %>% 
         left_join(max_dates, by = "individuals") %>% 
-        filter(date < max_date - 30) %>% 
+        filter(date < max_date - limit_upper_last_n_days_for_data_reduction) %>% 
         group_by(individuals, date) %>% 
         summarise(long = mean(long),
                   lat = mean(lat),
@@ -343,18 +418,18 @@ shinyModule <- function(input, output, session, data) {
         group_by(individuals) %>% 
         slice(-1)
       
-      # get all locations per individual for last 30 days because this period is the most interesting considering stationarity
-      locations_last_30_days <- data_processed %>% 
+      # get all locations per individual for last n days because this period is the most interesting regarding stationarity
+      locations_last_n_days <- data_processed %>% 
         left_join(max_dates, by = "individuals") %>% 
-        filter(date >= max_date - 30) %>% 
+        filter(date >= max_date - limit_upper_last_n_days_for_data_reduction) %>% 
         select(individuals,
                timestamps,
                long,
                lat)
       
       data_processed_reduced <- locations_first %>% 
-        rbind(locations_last_year_without_last_30_days) %>% 
-        rbind(locations_last_30_days) %>% 
+        rbind(locations_last_year_without_last_n_days) %>% 
+        rbind(locations_last_n_days) %>% 
         mutate(date = as.Date(format(timestamps, format = "%Y-%m-%d"))) %>% 
         arrange(individuals, timestamps)
       
@@ -378,23 +453,24 @@ shinyModule <- function(input, output, session, data) {
     
     # remove modal after data processing and notify user
     remove_modal_spinner()
-    notify_success("Processing data and calculating distances complete.")
+    notify_success("Processing the data and calculating distances complete. Please wait for the map and time series to be rendered.")
     
     # show warning when loaded data exceeds certain amount of observations
-    if (nrow(data_processed) > 100000) {
+    if (nrow(data_processed) > limit_upper_observations) {
       
       showModal(
         modalDialog(
           title = strong("Warning!", style = "font-size:24px; color: red;"),
-          p("The data you loaded exceeds 100000 observations.
+          p(paste0("The data you loaded exceeds ", limit_upper_observations, " observations.
             To keep the app performant,
             the amount of data displayed on the map when all individuals are selected is reduced as follows:
-            Keep the first location per individual and all locations within the last 30 days per individual;
-            Calculate the mean location per day for the last year up to the last 30 days for each individual.
-            Should a single individual exceed 100000 observations,
+            Keep the first location per individual and all locations within the last ", limit_upper_last_n_days_for_data_reduction, " days per individual;
+            Calculate the mean location per day for the last year up to the last ", limit_upper_last_n_days_for_data_reduction, " days for each individual.
+            Should a single individual exceed ", limit_upper_observations, " observations,
             the same procedure is applied when the respective individual is selected.
             The statistics table and time series plot are not affected by the automatic data reduction.
-            Please consider loading less data to avoid triggering the automatic data reduction.", style = "font-size:16px"),
+            Please consider loading less data to avoid triggering the automatic data reduction."),
+            style = "font-size:16px"),
           footer = modalButton("Close"))
       )
       
@@ -504,10 +580,11 @@ shinyModule <- function(input, output, session, data) {
     
     # load reactive data
     data_aggregated <- rctv_data_aggregated()$data_aggregated
+    individuals <- rctv_data_aggregated()$individuals
     
     # select individual to plot data for
     if (input$dropdown_individual == "all") {
-      individual <- data_aggregated$individuals[1]
+      individual <- individuals[1]
     } else {
       individual <- input$dropdown_individual
     }
@@ -588,7 +665,6 @@ shinyModule <- function(input, output, session, data) {
     
     # limit number of shown tracks on map if needed
     track_limit <- length_remaining_individuals
-    fixed_track_limit <- 10
     if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
     }
@@ -685,7 +761,7 @@ shinyModule <- function(input, output, session, data) {
                                library = "fa",
                                markerColor = "red")
       
-      if (nrow(data_processed_filtered) <= 100000) {
+      if (nrow(data_processed_filtered) <= limit_upper_observations) {
         
         # add lines and points
         map <- map %>% 
