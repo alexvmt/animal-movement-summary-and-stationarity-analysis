@@ -16,6 +16,7 @@ library(DT)
 library(RColorBrewer)
 library(dplyr)
 library(shinybusy)
+library(leafem)
 
 # disable scientific notation
 options(scipen = 999)
@@ -678,7 +679,8 @@ shinyModule <- function(input, output, session, data) {
       addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
       addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"),
                        overlayGroups = c("Lines", "Points"),
-                       options = layersControlOptions(collapsed = FALSE))
+                       options = layersControlOptions(collapsed = FALSE)) %>% 
+      leafem::addMouseCoordinates()
     
     # populate map
     if (length(remaining_individuals) > 1) {
