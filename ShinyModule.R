@@ -638,6 +638,7 @@ shinyModule <- function(input, output, session, data) {
     data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
     data_processed_reduced_filtered <- rctv_data_processed_filtered()$data_processed_reduced_filtered
     individuals <- rctv_data_processed_filtered()$individuals
+    stationary_individuals <- rctv_stationary_individuals()
     
     # set map colors and parameters
     qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
@@ -686,16 +687,19 @@ shinyModule <- function(input, output, session, data) {
         
         if (nrow(data_processed_reduced_filtered) == 0) {
           
+          # filter data for individual
+          data_processed_filtered_individual <- data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ]
+          
           # add lines and points
           map <- map %>% 
-            addPolylines(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+            addPolylines(data = data_processed_filtered_individual,
                          lng = ~long,
                          lat = ~lat,
                          color = individual_colors[i],
                          opacity = line_opacity,
                          weight = line_weight,
                          group = "Lines") %>% 
-            addCircles(data = data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ],
+            addCircles(data = data_processed_filtered_individual,
                        lng = ~long,
                        lat = ~lat,
                        color = individual_colors[i],
@@ -706,16 +710,19 @@ shinyModule <- function(input, output, session, data) {
           
         } else {
           
+          # filter data for individual
+          data_processed_filtered_individual <- data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ]
+          
           # add lines and points
           map <- map %>% 
-            addPolylines(data = data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ],
+            addPolylines(data = data_processed_filtered_individual,
                          lng = ~long,
                          lat = ~lat,
                          color = individual_colors[i],
                          opacity = line_opacity,
                          weight = line_weight,
                          group = "Lines") %>% 
-            addCircles(data = data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ],
+            addCircles(data = data_processed_filtered_individual,
                        lng = ~long,
                        lat = ~lat,
                        color = individual_colors[i],
@@ -725,7 +732,38 @@ shinyModule <- function(input, output, session, data) {
                        group = "Points")
           
         }
-      
+        
+      }
+        
+      # add marker for last location of stationary individuals if there are any
+      if (nrow(stationary_individuals) > 0) {
+        
+        for (remaining_individual in remaining_individuals) {
+          
+          stationary_individual <- unique(stationary_individuals[stationary_individuals$individuals == remaining_individual, ]$individuals)
+          
+          if (length(stationary_individual) > 0) {
+            
+            data_processed_filtered_stationary <- tail(data_processed_filtered[data_processed_filtered$individuals == stationary_individual, ], 1)
+            
+            stationary_long <- data_processed_filtered_stationary$long
+            stationary_lat <- data_processed_filtered_stationary$lat
+            stationary_time <- data_processed_filtered_stationary$timestamps
+            
+            stationary_icon <- awesomeIcons(icon = "map-pin",
+                                            library = "fa",
+                                            markerColor = "black")
+            
+            map <- map %>% 
+              addAwesomeMarkers(lng = stationary_long,
+                                lat = stationary_lat,
+                                icon = stationary_icon,
+                                label = paste0("Stationary at: ", stationary_time))
+            
+          }
+          
+        }
+        
       }
       
       # don't show legend if map is showing more than 10 tracks
@@ -736,7 +774,7 @@ shinyModule <- function(input, output, session, data) {
                     colors = individual_colors,
                     opacity = legend_opacity,
                     labels = remaining_individuals)
-
+        
       }
       
     } else {
