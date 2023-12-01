@@ -31,10 +31,10 @@ choices_date_range <- list("last day" = 1,
                            "last year" = 365)
 default_date_range <- 180
 
-# set limits and default for max diameter
-limit_lower_max_diameter <- 1
-limit_upper_max_diameter <- 100000
-default_max_diameter <- 100
+# set limits and default for max distance
+limit_lower_max_distance <- 1
+limit_upper_max_distance <- 100000
+default_max_distance <- 100
 
 # set limits and default for min duration
 limit_lower_min_duration <- 1
@@ -84,11 +84,11 @@ shinyModuleUserInterface <- function(id, label) {
                          selected = c("last 180 days" = default_date_range))
              ),
       column(2,
-             numericInput(ns("max_diameter"),
-                          "Max. diameter (m):",
-                          default_max_diameter,
-                          min = limit_lower_max_diameter,
-                          max = limit_upper_max_diameter)
+             numericInput(ns("max_distance"),
+                          "Max. distance (m):",
+                          default_max_distance,
+                          min = limit_lower_max_distance,
+                          max = limit_upper_max_distance)
              ),
       column(2,
              numericInput(ns("min_duration"),
@@ -192,24 +192,24 @@ shinyModule <- function(input, output, session, data) {
     
   })
   
-  # ensure that max diameter is within limits
+  # ensure that max distance is within limits
   observe({
     
-    if (input$max_diameter > limit_upper_max_diameter || input$max_diameter < limit_lower_max_diameter) {
+    if (input$max_distance > limit_upper_max_distance || input$max_distance < limit_lower_max_distance) {
       
       showModal(
         modalDialog(
           title = strong("Warning!", style = "font-size:24px; color: red;"),
-          p(paste0("Input value for max. diameter exceeds limits (min: ",
-                   limit_lower_max_diameter,
+          p(paste0("Input value for max. distance exceeds limits (min: ",
+                   limit_lower_max_distance,
                    "; max: ",
-                   limit_upper_max_diameter,
+                   limit_upper_max_distance,
                    "). Reset to default."),
             style = "font-size:16px"),
           footer = modalButton("Close"))
         )
       
-      updateNumericInput(session, "max_diameter", value = default_max_diameter)
+      updateNumericInput(session, "max_distance", value = default_max_distance)
       
     }
     
@@ -491,15 +491,15 @@ shinyModule <- function(input, output, session, data) {
     # load reactive data
     data_processed <- rctv_data_processed()$data_processed
     
-    # get max diameter
-    max_diameter <- as.numeric(input$max_diameter)
+    # get max distance
+    max_distance <- as.numeric(input$max_distance)
     
     # get min duration
     min_duration <- as.numeric(input$min_duration)
     
     # get non-stationary individuals if there are any
     non_stationary_individuals <- data_processed %>% 
-      filter((difference_hours_last <= min_duration) & (distance_meters_last > max_diameter)) %>% 
+      filter((difference_hours_last <= min_duration) & (distance_meters_last > max_distance)) %>% 
       distinct(individuals)
     
     # get stationary individuals if there are any
