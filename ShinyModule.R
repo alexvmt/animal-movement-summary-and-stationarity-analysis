@@ -173,7 +173,7 @@ shinyModule <- function(input, output, session, data) {
   # make input data reactive so that it can be returned later if unmodified
   current <- reactiveVal(data)
   
-  # generate inputs for dropdowns
+  # generate values for dropdown individual
   observe({
     
     # show modal during data loading
@@ -181,9 +181,9 @@ shinyModule <- function(input, output, session, data) {
     
     # wait until the data is loaded
     if (is.null(data)) return()
-    individuals <- trackId(data)
-    keys <- c(sort(as.character(individuals)), "all")
-    values <- c(sort(as.character(individuals)), "all")
+    unique_individuals <- sort(as.character(namesIndiv(data)))
+    keys <- c(unique_individuals, "all")
+    values <- c(unique_individuals, "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all"))
     
