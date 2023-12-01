@@ -877,14 +877,17 @@ shinyModule <- function(input, output, session, data) {
   rctv_movement_summary <- reactive({
     
     # load reactive data
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
     data_aggregated <- rctv_data_aggregated()$data_aggregated
     individuals <- rctv_data_aggregated()$individuals
     stationary_individuals <- rctv_stationary_individuals()
     
     # create empty dataframe to store movement summary
     movement_summary_columns <- c("individual",
-                                  "start date",
-                                  "end date",
+                                  "first timestamp",
+                                  "first location",
+                                  "last timestamp",
+                                  "last location",
                                   "#days w measures",
                                   "#days w/o measures",
                                   "total distance (km)",
@@ -896,11 +899,18 @@ shinyModule <- function(input, output, session, data) {
     for (individual in individuals) {
       
       # filter data based on individual
+      individual_data_processed_filtered <- data_processed_filtered[data_processed_filtered$individuals == individual, ]
       individual_data_aggregated <- data_aggregated[data_aggregated$individuals == individual, ]
       
-      # get start and end date
-      start_date <- min(individual_data_aggregated$date)
-      end_date <- max(individual_data_aggregated$date)
+      # get first and last timestamp
+      first_timestamp <- min(individual_data_processed_filtered$timestamps)
+      last_timestamp <- max(individual_data_processed_filtered$timestamps)
+      
+      # get first and last location
+      first_long <- head(individual_data_processed_filtered, 1)$long
+      last_long <- tail(individual_data_processed_filtered, 1)$long
+      first_lat <- head(individual_data_processed_filtered, 1)$lat
+      last_lat <- tail(individual_data_processed_filtered, 1)$lat
       
       # get number of days with and without measures
       days_with_measures <- dim(individual_data_aggregated)[1]
@@ -913,8 +923,10 @@ shinyModule <- function(input, output, session, data) {
 
       # store values
       individual_movement_summary <- c(individual,
-                                       as.character(start_date),
-                                       as.character(end_date),
+                                       as.character(first_timestamp),
+                                       paste0("(", first_long, ", ", first_lat, ")"),
+                                       as.character(last_timestamp),
+                                       paste0("(", last_long, ", ", last_lat, ")"),
                                        days_with_measures,
                                        days_without_measures,
                                        round(total_distance / 1000, 2),
@@ -940,7 +952,7 @@ shinyModule <- function(input, output, session, data) {
                                     "var. measures")
 
     # convert relevant columns to numeric
-    movement_summary[ , 4:9] <- apply(movement_summary[ , 4:9], 2, as.numeric)
+    movement_summary[ , 6:11] <- apply(movement_summary[ , 6:11], 2, as.numeric)
     
     # join stationary individuals if there are any
     if (nrow(stationary_individuals) > 0) {
