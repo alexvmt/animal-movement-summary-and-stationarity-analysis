@@ -5,6 +5,7 @@ MoveApps
 Github repository: https://github.com/alexvmt/animal-movement-summary-and-stationarity-analysis
 
 ## Description
+
 This app helps identify stationary animals in movement data.
 A downloadable statistical movement summary table summarizes the given data to spot anomalous behavior,
 a tracker map visualizes animal tracks, including clustering of locations,
@@ -13,6 +14,7 @@ The interface allows to filter for individuals and specific date ranges (such as
 It also allows to dynamically set maximum distance and minimum duration inputs for identifiying stationary individuals.
  
 ## Documentation
+
 The app processes a given dataset and fills a dropdown with the given individuals (based on the dataset's respective id column).
 This dropdown can be used to analyze a single animal of a tracked group of animals.
 In addition, a date range filter allows to focus on different periods of time.
@@ -36,6 +38,7 @@ Filtering and again aggregating data if the date range filter is changed may tak
 The aggregated data is not used for the tracker map but only for the statistics table and the time series plot.
 
 **Stationarity detection**
+
 The processed data in combination with the max. distance and min. duration inputs is used to detect stationary individuals.
 The default is 100 meters for max. distance while the minimum is 1 meter and the maximum is 100000 meters.
 The default is 24 hours for min. duration while the minimum is 1 hour and the maximum is 240 hours.
@@ -44,6 +47,7 @@ Given an individual's known locations,
 it is considered stationary if it has not moved past the set max. distance within the set min. duration from its last known location.
 
 **Automatic data recuction**
+
 An automatic data reduction is triggered if the number of observations in the loaded dataset exceeds the limit of 100000 observations
 in order to maintain the app's performance.
 In case the automatic data reduction is triggered (a warning message is shown in the app),
@@ -52,6 +56,7 @@ because this period is the most interesting regarding end-of-track stationarity.
 The data inbetween are reduced to one location per day by calculating the daily mean longitude and latitude.
 
 **Further notes**
+
 - Please note that the app performs best with rather small datasets, containing not too many individuals.
 - This is mainly because calculating distances between coordinates is computation-intensive
 when there are frequent location measurements (e. g. a fix every minute).
@@ -107,7 +112,7 @@ The plot is interactive and the user can zoom into specific regions of interest.
 
 ![time_series_plot](screenshots/time_series_plot.png 'time_series_plot')
 
-Potential workflow:
+**Potential workflow**
 
 1. After setting the max. distance and min. duration inputs, use the statistics table to identify individuals of interest that have been moving only a little or not at all throughout the last week for example
 (use the date range filter to decide on a suitable date range). Are any individuals actually classified as stationary?
@@ -124,7 +129,7 @@ This exemplary workflow might be helpful to spot stationary animals or other unu
 MoveStack in Movebank format
 
 ### Output data
-moveStack
+MoveStack
 
 ### Artefacts
 None.
