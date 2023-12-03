@@ -140,32 +140,40 @@ shinyModule <- function(input, output, session, data) {
     showModal(modalDialog(
       title = "About this app",
       HTML(
-        "This app helps find stationarity in animal movement mainly through a visual analysis of animal tracking data.<br><br>
+        "This app helps identify stationary animals in movement data.<br><br>
         
         It consists of three components:
         <li>statistical movement summary table</li>
-        <li>map with animal tracks (and last coordinates)</li>
-        <li>time series plot to help visually spot anomalous movement patterns</li><br>
+        <li>map with animal tracks</li>
+        <li>time series plot of daily distances moved</li><br>
         
-        <b>Filters:</b>
-        <li>The date range filter applies to all individuals in a given dataset and all three components in the app.
-        Filtering and again aggregating data if the date range filter is changed may take a moment.</li>
-        <li>Selecting an individual will not affect the movement summary table.
-        Only the map and time series plot will be filtered according to the selected individual.</li><br>
+        <b>Filters and inputs:</b>
+        <li>The date range filter applies to all individuals in a given dataset and all three components of the app.</li>
+        <li>Selecting an individual will not affect the table.
+        Only the map and time series plot will be filtered according to the selected individual.</li>
+        <li>The max. distance input sets the distance to the last coordinates which an individual has to have moved
+        within a given amount of time to not be considered stationary.</li>
+        <li>This given amount of time is set through the min. duration input.</li><br>
         
         <b>Potential workflow:</b><br>
-        A potential workflow could start by spotting a single animal of interest in either the table or the map.
+        A potential workflow, after setting the max. distance and min. duration inputs,
+        could start by spotting a single animal of interest in either the table or the map.
         Then the data can be filtered for this specific animal and different date ranges can also be analyzed.
         A date range always refers to the last n days of each animal's tracking data time series.<br><br>
         
         <b>Notes:</b>
+        <li>Please refer to the documentation on GitHub for more details.</li>
         <li>Aggregation happens at a daily resolution.</li>
-        <li>Distances are calculated in meters (using Haversine great circle distance).</li>
-        <li>The maximum date range to be analyzed are the last 365 days per individual.</li>
+        <li>Distances are calculated in meters (using Vincenty ellipsoid great circle distance).</li>
         <li>Please note that the app performs best with rather small datasets, containing not too many individuals.
-        This is mainly because loading data and calculating distances between coordinates is computationaly intense when there are frequent location measurements (e. g. every 5 minutes).</li>
+        This is mainly because calculating distances between coordinates is computation-intensive
+        when there are frequent location measurements (e. g. a fix every minute).</li>
+        <li>An automatic data reduction is triggered when the loaded dataset exceeds a certain limit.</li>
         <li>Plotting many locations for many individuals on the map also slows the app down.</li>
-        <li>If the check box to limit the number of tracks on the map is checked, tracks are shown only for the first 10 individuals (selected from the tag ids in ascending order).</li>"
+        <li>Rendering the map and time series plot for the first time after starting the app may take some time.</li>
+        <li>If the check box to limit the number of tracks on the map is checked,
+        tracks are shown only for the first 10 individuals
+        (selected from the dataset's respective id column in ascending order).</li>"
       )
     ))
   })
