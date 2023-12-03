@@ -43,7 +43,7 @@
       }
     ]
   },
-  "createsArtifacts": true,
+  "createsArtifacts": false,
   "license": {
     "key": "MIT"
   },
@@ -68,7 +68,7 @@
     },
     {
       "firstName": "Alexander",
-      "middleInitials": null,
+      "middleInitials": "V",
       "lastName": "Merdian-Tarko",
       "email": "alexander.merdian-tarko@posteo.de",
       "roles": [
