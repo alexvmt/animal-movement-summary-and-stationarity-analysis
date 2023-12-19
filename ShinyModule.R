@@ -16,6 +16,45 @@ library(DT)
 library(RColorBrewer)
 library(dplyr)
 library(shinybusy)
+library(leafem)
+
+# disable scientific notation
+options(scipen = 999)
+
+# create list with choices for date range dropdown and set default choice
+choices_date_range <- list("last day" = 1,
+                           "last week" = 7,
+                           "last 30 days" = 30,
+                           "last 60 days" = 60,
+                           "last 90 days" = 90,
+                           "last 180 days" = 180,
+                           "last year" = 365)
+default_date_range <- 180
+
+# set limits and default for max distance
+limit_lower_max_distance <- 1
+limit_upper_max_distance <- 100000
+default_max_distance <- 100
+
+# set limits and default for min duration
+limit_lower_min_duration <- 1
+limit_upper_min_duration <- 240
+default_min_duration <- 24
+
+# set max number of last days to process
+last_n_days <- 365
+
+# set max number of last hours for calculating distance to last location
+max_min_duration_parameter <- 240
+
+# set limit for observations before automatic data reduction is triggered
+limit_upper_observations <- 100000
+
+# set max number of last n days to keep all locations for during automatic data reduction
+limit_upper_last_n_days_for_data_reduction <- 10
+
+# set max number of tracks to be shown on map when all individuals are selected
+fixed_track_limit <- 10
 
 
 
@@ -24,6 +63,10 @@ library(shinybusy)
 ####################
 
 shinyModuleUserInterface <- function(id, label) {
+  
+  # create function to insert linebreaks
+  linebreaks <- function(n){HTML(strrep(br(), n))}
+  
   ns <- NS(id)
   tagList(
     titlePanel("Animal Movement Summary and Stationarity Analysis"),
@@ -32,29 +75,57 @@ shinyModuleUserInterface <- function(id, label) {
       column(2,
              selectInput(ns("dropdown_individual"),
                          "Individual:",
-                         choices = c("all")),
+                         choices = c("all"))
+             ),
+      column(2,
              selectInput(ns("dropdown_date_range"),
                          "Date range:",
-                         choices = list("last day" = 1,
-                                        "last week" = 7,
-                                        "last 30 days" = 30,
-                                        "last 60 days" = 60,
-                                        "last 90 days" = 90,
-                                        "last 180 days" = 180,
-                                        "last year" = 365,
-                                        "all time" = 99999),
-                         selected = c("last 180 days" = 180)),
-	     checkboxInput(ns("checkbox_full_map"), "Limit map to 10 tracks", TRUE),
-             actionButton(ns("about_button"), "Show app info")),
-      column(10, dataTableOutput(ns("movement_summary")))
-    ),
+                         choices = choices_date_range,
+                         selected = c("last 180 days" = default_date_range))
+             ),
+      column(2,
+             numericInput(ns("max_distance"),
+                          "Max. distance (m):",
+                          default_max_distance,
+                          min = limit_lower_max_distance,
+                          max = limit_upper_max_distance)
+             ),
+      column(2,
+             numericInput(ns("min_duration"),
+                          "Min. duration (h):",
+                          default_min_duration,
+                          min = limit_lower_min_duration,
+                          max = limit_upper_min_duration)
+             ),
+      column(2,
+             linebreaks(1),
+             downloadButton(ns("download_table"),
+                            "Download table")
+             ),
+      column(2,
+             linebreaks(1),
+             actionButton(ns("about_button"),
+                          "Show app info")
+             )
+      ),
     fluidRow(
-      column(2),
-      column(6, leafletOutput(ns("map"))),
-      column(4, plotlyOutput(ns("time_series")))
+      column(12,
+             dataTableOutput(ns("movement_summary"))
+             )
+      ),
+    fluidRow(
+      column(7,
+             checkboxInput(ns("checkbox_full_map"),
+                           "Limit map to 10 tracks", TRUE),
+             leafletOutput(ns("map"))
+             ),
+      column(5,
+             linebreaks(2),
+             plotlyOutput(ns("time_series"))
+             )
+      )
     )
-  )
-}
+  }
 
 
 
@@ -68,23 +139,49 @@ shinyModule <- function(input, output, session, data) {
   observeEvent(input$about_button, {
     showModal(modalDialog(
       title = "About this app",
-      "This app helps find stationarity in animal movement and explore animal tracking data.
-      Three components: (i) a movement summary table, (ii) a map with animal tracks (and last coordinates) and (iii) a time series plot help analyze a given dataset.
-      The date range filter applies to all individuals in a given dataset and all three components in the app.
-      Selecting an individual will not affect the movement summary table.
-      Only the map and time series plot will be filtered.
-      Data is aggregated by day and distances are calculated in meters.
-      A potential workflow could start by spotting a single animal of interest in either the movement summary table or the map.
-      Then the data can be filtered for this specific animal and also different date ranges can be analyzed.
-      A date range always refers to the last n days of each given animal tracking series.
-      Please note that due to somewhat heavy data processing the app performs best with rather small datasets, containing not too many individuals."
+      HTML(
+        "This app helps identify stationary animals in movement data.<br><br>
+        
+        It consists of three components:
+        <li>statistical movement summary table</li>
+        <li>map with animal tracks</li>
+        <li>time series plot of daily distances moved</li><br>
+        
+        <b>Filters and inputs:</b>
+        <li>The date range filter applies to all individuals in a given dataset and all three components of the app.</li>
+        <li>Selecting an individual will not affect the table.
+        Only the map and time series plot will be filtered according to the selected individual.</li>
+        <li>The max. distance input sets the distance to the last coordinates which an individual has to have moved
+        within a given amount of time to not be considered stationary.</li>
+        <li>This given amount of time is set through the min. duration input.</li><br>
+        
+        <b>Potential workflow:</b><br>
+        A potential workflow, after setting the max. distance and min. duration inputs,
+        could start by spotting a single animal of interest in either the table or the map.
+        Then the data can be filtered for this specific animal and different date ranges can also be analyzed.
+        A date range always refers to the last n days of each animal's tracking data time series.<br><br>
+        
+        <b>Notes:</b>
+        <li>Please refer to the documentation on GitHub for more details.</li>
+        <li>Aggregation happens at a daily resolution.</li>
+        <li>Distances are calculated in meters (using Vincenty ellipsoid great circle distance).</li>
+        <li>Please note that the app performs best with rather small datasets, containing not too many individuals.
+        This is mainly because calculating distances between coordinates is computation-intensive
+        when there are frequent location measurements (e. g. a fix every minute).</li>
+        <li>An automatic data reduction is triggered when the loaded dataset exceeds a certain limit.</li>
+        <li>Plotting many locations for many individuals on the map also slows the app down.</li>
+        <li>Rendering the map and time series plot for the first time after starting the app may take some time.</li>
+        <li>If the check box to limit the number of tracks on the map is checked,
+        tracks are shown only for the first 10 individuals
+        (selected from the dataset's respective id column in ascending order).</li>"
+      )
     ))
   })
   
-  # make loaded data reactive
-  rctv_data <- reactive({ data })
+  # make input data reactive so that it can be returned later if unmodified
+  current <- reactiveVal(data)
   
-  # generate inputs for dropdowns
+  # generate values for dropdown individual
   observe({
     
     # show modal during data loading
@@ -92,9 +189,9 @@ shinyModule <- function(input, output, session, data) {
     
     # wait until the data is loaded
     if (is.null(data)) return()
-    data_df <- as.data.frame(data)
-    keys <- c(sort(as.character(data_df$tag.local.identifier)), "all")
-    values <- c(sort(as.character(data_df$tag.local.identifier)), "all")
+    unique_individuals <- sort(as.character(namesIndiv(data)))
+    keys <- c(unique_individuals, "all")
+    values <- c(unique_individuals, "all")
     key_value_list <- setNames(values, keys)
     updateSelectInput(session, "dropdown_individual", choices = key_value_list, selected = c("all" = "all"))
     
@@ -103,52 +200,99 @@ shinyModule <- function(input, output, session, data) {
     
   })
   
+  # ensure that max distance is within limits
+  observe({
+    
+    if (input$max_distance > limit_upper_max_distance || input$max_distance < limit_lower_max_distance) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p(paste0("Input value for max. distance exceeds limits (min: ",
+                   limit_lower_max_distance,
+                   "; max: ",
+                   limit_upper_max_distance,
+                   "). Reset to default."),
+            style = "font-size:16px"),
+          footer = modalButton("Close"))
+        )
+      
+      updateNumericInput(session, "max_distance", value = default_max_distance)
+      
+    }
+    
+  })
+  
+  # ensure that min duration is within limits
+  observe({
+    
+    if (input$min_duration > limit_upper_min_duration || input$min_duration < limit_lower_min_duration) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p(paste0("Input value for min. duration exceeds limits (min: ",
+                   limit_lower_min_duration,
+                   "; max: ",
+                   limit_upper_min_duration,
+                   "). Reset to default."),
+            style = "font-size:16px"),
+          footer = modalButton("Close"))
+      )
+      
+      updateNumericInput(session, "min_duration", value = default_min_duration)
+      
+    }
+    
+  })
+  
   
   
   ##### process loaded data
-  rctv_processed_data <- reactive({
+  rctv_data_processed <- reactive({
     
     # show modal during data processing
-    show_modal_spinner(text = "Processing data. Please wait.")
+    show_modal_spinner(text = "Processing the input data and calculating distances between locations. This may take a moment.
+                       Rendering the map and time series for the first time may also take a couple minutes.
+                       Please wait.")
     
-    # transform move object to dataframe
-    data_df <- as.data.frame(data)
+    # ensure that data is in epsg 4326
+    data <- spTransform(data, CRSobj = "+init=epsg:4326")
+    
+    # extract relevant data from move object and create dataframe
+    individuals <- trackId(data)
+    timestamps <- timestamps(data)
+    long <- coordinates(data)[, 1]
+    lat <- coordinates(data)[, 2]
+    data_df <- data.frame(individuals, timestamps, long, lat)
     
     # reset row names
     row.names(data_df) <- NULL
     
-    # cast tag.local.identifier to character
-    data_df$tag.local.identifier <- as.character(data_df$tag.local.identifier)
-    
-    # make sure right coordinates are used
-    if ("coords.x1" %in% names(data_df)) {
-      data_df$location.long <- data_df$coords.x1
-    }
-    
-    if ("coords.x2" %in% names(data_df)) {
-      data_df$location.lat <- data_df$coords.x2
-    }
+    # cast individuals to character
+    data_df$individuals <- as.character(data_df$individuals)
     
     # get individuals
-    individuals <- unique(data_df$tag.local.identifier)
+    individuals <- sort(unique(data_df$individuals))
     
     # create year and date columns
     data_df$date <- as.Date(format(data_df$timestamps, format = "%Y-%m-%d"))
     data_df$year <- as.integer(format(data_df$timestamps, format = "%Y"))
     
     # create empty dataframe to store processed individual data
-    processed_data <- data.frame(matrix(ncol = 5, nrow = 0))
-    processed_data_columns <- c("tag.local.identifier", "timestamps", "location.long", "location.lat", "date")
-    colnames(processed_data) <- processed_data_columns
-    
-    # select time window
-    last_n_days <- as.numeric(input$dropdown_date_range)
+    data_processed <- data.frame(matrix(ncol = 5, nrow = 0))
+    processed_data_columns <- c("individuals",
+                                "timestamps",
+                                "long",
+                                "lat",
+                                "date")
+    colnames(data_processed) <- processed_data_columns
     
     # process last n days of observations per individual
-    for(individual in individuals) {
+    for (individual in individuals) {
       
       # filter data based on individual
-      individual_data <- data_df[data_df$tag.local.identifier == individual, ]
+      individual_data <- data_df[data_df$individuals == individual, ]
       
       # subset data to relevant columns
       individual_data <- individual_data[ , processed_data_columns]
@@ -157,7 +301,7 @@ shinyModule <- function(input, output, session, data) {
       individual_data <- na.omit(individual_data)
       
       # drop duplicated rows
-      individual_data <- individual_data[!duplicated(individual_data[c("tag.local.identifier", "timestamps")]), ]
+      individual_data <- individual_data[!duplicated(individual_data[c("individuals", "timestamps")]), ]
       
       # extract max and min date
       max_date <- max(individual_data$date)
@@ -167,85 +311,295 @@ shinyModule <- function(input, output, session, data) {
       individual_data <- individual_data[(individual_data$date > min_date) & (individual_data$date <= max_date), ]
       
       # append processed data to existing dataframe
-      processed_data <- rbind(processed_data, individual_data)
+      data_processed <- rbind(data_processed, individual_data)
       
     }
     
     # order data
-    processed_data <- processed_data[order(processed_data$tag.local.identifier, processed_data$timestamps), ]
+    data_processed <- data_processed[order(data_processed$individuals, data_processed$timestamps), ]
     
     # create lag columns
-    processed_data$tag.local.identifier.lag <- c(NA, head(processed_data$tag.local.identifier, -1))
-    processed_data$location.long.lag <- c(NA, head(processed_data$location.long, -1))
-    processed_data$location.lat.lag <- c(NA, head(processed_data$location.lat, -1))
+    data_processed$individuals_lag <- c(NA, head(data_processed$individuals, -1))
+    data_processed$long_lag <- c(NA, head(data_processed$long, -1))
+    data_processed$lat_lag <- c(NA, head(data_processed$lat, -1))
     
-    processed_data$tag.local.identifier.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
-                                                      processed_data$tag.local.identifier.lag,
-                                                      NA)
+    data_processed$individuals_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                             data_processed$individuals_lag,
+                                             NA)
     
-    processed_data$location.long.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
-                                               processed_data$location.long.lag,
-                                               NA)
+    data_processed$long_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                      data_processed$long_lag,
+                                      NA)
     
-    processed_data$location.lat.lag <- ifelse(processed_data$tag.local.identifier == processed_data$tag.local.identifier.lag,
-                                              processed_data$location.lat.lag,
-                                              NA)
+    data_processed$lat_lag <- ifelse(data_processed$individuals == data_processed$individuals_lag,
+                                     data_processed$lat_lag,
+                                     NA)
     
-    # calculate distance between two location measurements
-    calculate_distance_in_meters_between_coordinates <- function(lon_a, lat_a, lon_b, lat_b) {
-      if(anyNA(c(lon_a, lat_a, lon_b, lat_b))) return(NA)
-      distm(c(lon_a, lat_a), c(lon_b, lat_b), fun = distHaversine)
+    # create function to calculate distance between coordinates
+    calculate_distance_in_meters_between_coordinates <- function(long_a, lat_a, long_b, lat_b) {
+      if(anyNA(c(long_a, lat_a, long_b, lat_b))) return(NA)
+      distm(c(long_a, lat_a), c(long_b, lat_b), fun = distVincentyEllipsoid)
     }
     
-    processed_data$distance_meters <- mapply(lon_a = processed_data$location.long,
-                                             lat_a = processed_data$location.lat,
-                                             lon_b = processed_data$location.long.lag,
-                                             lat_b = processed_data$location.lat.lag,
-                                             FUN = calculate_distance_in_meters_between_coordinates)
+    # calculate distance between two successive coordinates
+    data_processed$distance_meters_successive <- mapply(long_a = data_processed$long,
+                                                        lat_a = data_processed$lat,
+                                                        long_b = data_processed$long_lag,
+                                                        lat_b = data_processed$lat_lag,
+                                                        FUN = calculate_distance_in_meters_between_coordinates)
+    
+    # drop rows with missing distances
+    data_processed <- data_processed %>% 
+      filter(!is.na(distance_meters_successive))
+    
+    # get max date per individual
+    max_dates <- data_processed %>% 
+      group_by(individuals) %>% 
+      summarise(max_date = max(date))
+    
+    # get last timestamp and coordinates per individual
+    last_timestamps_coordinates <- data_processed %>% 
+      group_by(individuals) %>% 
+      arrange(timestamps) %>% 
+      filter(row_number() == n()) %>% 
+      rename(timestamps_last = timestamps,
+             long_last = long,
+             lat_last = lat) %>% 
+      select(individuals,
+             timestamps_last,
+             long_last,
+             lat_last)
+    
+    # join data processed and last timestamps and coordinates
+    data_processed <- data_processed %>% 
+      left_join(last_timestamps_coordinates, by = "individuals")
+    
+    # calculate difference between given and last timestamp
+    data_processed$difference_hours_last <- as.numeric(difftime(data_processed$timestamps_last, data_processed$timestamps, units ="hours"))
+    
+    # calculate distance between given and last coordinates
+    # only for time period within maximum of minimum duration parameter to avoid calculating unnecessary distances
+    data_processed_max_time_period <- data_processed %>% 
+      filter(difference_hours_last <= max_min_duration_parameter)
+    
+    data_processed_max_time_period$distance_meters_last <- mapply(long_a = data_processed_max_time_period$long,
+                                                                  lat_a = data_processed_max_time_period$lat,
+                                                                  long_b = data_processed_max_time_period$long_last,
+                                                                  lat_b = data_processed_max_time_period$lat_last,
+                                                                  FUN = calculate_distance_in_meters_between_coordinates)
+    
+    data_processed <- data_processed %>% 
+      filter(difference_hours_last > max_min_duration_parameter) %>% 
+      mutate(distance_meters_last = NA) %>% 
+      rbind(data_processed_max_time_period)
+    
+    # drop columns that are not needed anymore
+    columns_to_drop <- c("individuals_lag",
+                         "long_lag",
+                         "lat_lag",
+                         "timestamps_last",
+                         "long_last",
+                         "lat_last")
+    data_processed <- subset(data_processed, select = !(names(data_processed) %in% columns_to_drop))
+    
+    # create reduced version of data to be plotted if all individuals are selected if amount of data exceeds limit
+    if (nrow(data_processed) > limit_upper_observations) {
+      
+      # get first location per individual
+      locations_first <- data_processed %>% 
+        group_by(individuals) %>% 
+        arrange(individuals, timestamps) %>% 
+        filter(row_number() == 1) %>% 
+        select(individuals,
+               timestamps,
+               long,
+               lat)
+      
+      # get one location per day and individual for last year without last n days
+      locations_last_year_without_last_n_days <- data_processed %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date < max_date - limit_upper_last_n_days_for_data_reduction) %>% 
+        group_by(individuals, date) %>% 
+        summarise(long = mean(long),
+                  lat = mean(lat),
+                  .groups = "keep") %>% 
+        rename(timestamps = date) %>% 
+        group_by(individuals) %>% 
+        slice(-1)
+      
+      # get all locations per individual for last n days because this period is the most interesting regarding stationarity
+      locations_last_n_days <- data_processed %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date >= max_date - limit_upper_last_n_days_for_data_reduction) %>% 
+        select(individuals,
+               timestamps,
+               long,
+               lat)
+      
+      data_processed_reduced <- locations_first %>% 
+        rbind(locations_last_year_without_last_n_days) %>% 
+        rbind(locations_last_n_days) %>% 
+        mutate(date = as.Date(format(timestamps, format = "%Y-%m-%d"))) %>% 
+        arrange(individuals, timestamps)
+      
+    } else {
+      
+      data_processed_reduced_columns <- c("individuals",
+                                          "timestamps",
+                                          "long",
+                                          "lat",
+                                          "date")
+      data_processed_reduced <- data.frame(matrix(ncol = length(data_processed_reduced_columns), nrow = 0))
+      colnames(data_processed_reduced) <- data_processed_reduced_columns
+      
+    }
+    
+    # remove objects that are not needed anymore
+    rm(data_df,
+       individual_data,
+       last_timestamps_coordinates,
+       data_processed_max_time_period)
     
     # remove modal after data processing and notify user
     remove_modal_spinner()
-    notify_success("Data processing complete.")
+    notify_success("Processing the data and calculating distances complete. Please wait for the map and time series to be rendered.")
     
-    rctv_processed_data <- processed_data
+    # show warning when loaded data exceeds certain amount of observations
+    if (nrow(data_processed) > limit_upper_observations) {
+      
+      showModal(
+        modalDialog(
+          title = strong("Warning!", style = "font-size:24px; color: red;"),
+          p(paste0("The data you loaded exceeds ", limit_upper_observations, " observations.
+            To keep the app performant,
+            the amount of data displayed on the map when all individuals are selected is reduced as follows:
+            Keep the first location per individual and all locations within the last ", limit_upper_last_n_days_for_data_reduction, " days per individual;
+            Calculate the mean location per day for the last year up to the last ", limit_upper_last_n_days_for_data_reduction, " days for each individual.
+            Should a single individual exceed ", limit_upper_observations, " observations,
+            the same procedure is applied when the respective individual is selected.
+            The statistics table and time series plot are not affected by the automatic data reduction.
+            Please consider loading less data to avoid triggering the automatic data reduction."),
+            style = "font-size:16px"),
+          footer = modalButton("Close"))
+      )
+      
+    }
     
-    rctv_processed_data
+    list(data_processed = data_processed,
+         data_processed_reduced = data_processed_reduced,
+         max_dates = max_dates)
     
   })
   
   
   
-  ##### aggregate processed data
+  ##### check individuals for stationarity
+  rctv_stationary_individuals <- reactive({
+    
+    # load reactive data
+    data_processed <- rctv_data_processed()$data_processed
+    
+    # get max distance
+    max_distance <- as.numeric(input$max_distance)
+    
+    # get min duration
+    min_duration <- as.numeric(input$min_duration)
+    
+    # get non-stationary individuals if there are any
+    non_stationary_individuals <- data_processed %>% 
+      filter((difference_hours_last <= min_duration) & (distance_meters_last > max_distance)) %>% 
+      distinct(individuals)
+    
+    # get stationary individuals if there are any
+    stationary_individuals <- data_processed %>% 
+      distinct(individuals) %>% 
+      anti_join(non_stationary_individuals, by = "individuals") %>% 
+      mutate(stationary = "yes")
+    
+    stationary_individuals
+    
+  })
+  
+  
+  
+  ##### filter processed data
+  rctv_data_processed_filtered <- reactive({
+    
+    # load reactive data
+    data_processed <- rctv_data_processed()$data_processed
+    data_processed_reduced <- rctv_data_processed()$data_processed_reduced
+    max_dates <- rctv_data_processed()$max_dates
+    
+    # get last n days
+    last_n_days <- as.numeric(input$dropdown_date_range)
+    
+    # filter data according to selected date range
+    data_processed_filtered <- data_processed %>% 
+      left_join(max_dates, by = "individuals") %>% 
+      filter(date >= max_date - last_n_days)
+    
+    if (nrow(data_processed_reduced) > 0) {
+      
+      data_processed_reduced_filtered <- data_processed_reduced %>% 
+        left_join(max_dates, by = "individuals") %>% 
+        filter(date >= max_date - last_n_days)
+      
+    } else {
+      
+      data_processed_reduced_filtered <- data_processed_reduced
+      
+    }
+    
+    # get individuals
+    individuals <- sort(unique(data_processed_filtered$individuals))
+    
+    list(data_processed_filtered = data_processed_filtered,
+         data_processed_reduced_filtered = data_processed_reduced_filtered,
+         individuals = individuals)
+    
+  })
+  
+  
+  
+  ##### aggregate filtered processed data
   rctv_data_aggregated <- reactive({
     
-    # aggregate distances by time interval and individual
-   data_aggregated <- rctv_processed_data() %>% 
-	   		filter(!is.na(distance_meters)) %>% 
-	   		group_by(date, tag.local.identifier) %>% 
-	   		summarise(distance_meters = sum(distance_meters, na.rm = TRUE),
-	   		          measures_per_date = n())
-
-    data_aggregated
+    # load reactive data
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
+    
+    # aggregate distances by date and individual
+    data_aggregated <- data_processed_filtered %>% 
+      group_by(date, individuals) %>% 
+      summarise(daily_distance_meters = sum(distance_meters_successive, na.rm = TRUE),
+                measures_per_date = n(),
+                .groups = "keep")
+    
+    # get individuals
+    individuals <- sort(unique(data_aggregated$individuals))
+    
+    list(data_aggregated = data_aggregated, 
+         individuals = individuals)
     
   })
   
   
   
   ##### time series
-  output$time_series <- renderPlotly({
+  rctv_time_series <- reactive({
     
     # load reactive data
-    data_aggregated <- rctv_data_aggregated()
+    data_aggregated <- rctv_data_aggregated()$data_aggregated
+    individuals <- rctv_data_aggregated()$individuals
     
     # select individual to plot data for
-    if(input$dropdown_individual == "all") {
-      individual <- data_aggregated$tag.local.identifier[1]
+    if (input$dropdown_individual == "all") {
+      individual <- individuals[1]
     } else {
       individual <- input$dropdown_individual
     }
     
     # get data to plot
-    data_to_plot <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
+    data_to_plot <- data_aggregated[data_aggregated$individuals == individual, ]
     start_date <- min(data_to_plot$date)
     end_date <- max(data_to_plot$date)
 
@@ -263,112 +617,267 @@ shinyModule <- function(input, output, session, data) {
     }
     
     # plot time series for selected individual
-    p <- plot_ly(as.data.frame(data_to_plot), x = ~date, y = ~distance_meters, type = "scatter", mode = "lines", name = individual) %>% 
-      layout(showlegend = TRUE, legend = list(orientation = "h", xanchor = "center", x = 0.5, y = 1))
+    p <- plot_ly(as.data.frame(data_to_plot),
+                 x = ~date,
+                 y = ~daily_distance_meters / 1000,
+                 type = "scatter",
+                 mode = "lines",
+                 name = individual) %>% 
+      layout(showlegend = TRUE,
+             legend = list(orientation = "h",
+                           xanchor = "center",
+                           x = 0.5,
+                           y = 1),
+             title = "Do the last distances moved look anomalous to you?",
+             yaxis = list(title = "Daily distance (km)"),
+             xaxis = list(title = "Date"))
     
     p
     
   })
   
+  output$time_series <- renderPlotly({ rctv_time_series() })
+  
   
   
   ##### map
-  map <- reactive({
+  rctv_map <- reactive({
     
     # load reactive data
-    processed_data <- rctv_processed_data()
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
+    data_processed_reduced_filtered <- rctv_data_processed_filtered()$data_processed_reduced_filtered
+    individuals <- rctv_data_processed_filtered()$individuals
+    stationary_individuals <- rctv_stationary_individuals()
     
-    # set map colors
+    # set map colors and parameters
     qual_col_pals <- brewer.pal.info[brewer.pal.info$category == "qual", ]
     col_vector <- tail(unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals))), -4)
+    line_opacity <- 0.8
+    line_weight <- 2
+    circle_opacity <- 0.5
+    circle_fill_opacity <- 0.3
+    legend_opacity <- 0.6
     
-    # store individual names and colors
-    individual_names_original <- unique(processed_data$tag.local.identifier)
-    individual_colors <- col_vector[1:length(individual_names_original)]
+    # store individual colors
+    individual_colors <- col_vector[1:length(individuals)]
 
     # filter for individual
-    if(input$dropdown_individual == "all") {
+    if (input$dropdown_individual == "all") {
       # do nothing and proceed
     } else {
-      processed_data <- processed_data[processed_data$tag.local.identifier == input$dropdown_individual, ]
+      data_processed_filtered <- data_processed_filtered[data_processed_filtered$individuals == input$dropdown_individual, ]
+      data_processed_reduced_filtered <- data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == input$dropdown_individual, ]
     }
     
-    # filter for date range
-    processed_data_filtered <- NULL
-    for(this_tag in unique(processed_data$tag.local.identifier)) {
-      individual_processed_data <- processed_data[processed_data$tag.local.identifier == this_tag, ]
-      temp_dates <- as.Date(individual_processed_data$timestamps)
-      max_temp_dates <- max(temp_dates)
-      individual_processed_data <- individual_processed_data[temp_dates > (max_temp_dates - as.numeric(input$dropdown_date_range)), ]
-      processed_data_filtered <- rbind(processed_data_filtered, individual_processed_data)
-    }
+    # get remaining individual(s)
+    remaining_individuals <- unique(data_processed_filtered$individuals)
+    length_remaining_individuals <- length(remaining_individuals)
     
-    # get remaining individuals
-    individual_names <- unique(processed_data_filtered$tag.local.identifier)
-    if (length(individual_names_original) == 1) {
-      selected_id <- 1
-    } else {
-      selected_id <- which(individual_names_original %in% input$dropdown_individual)
-    }
-    
-    this_line_opacity <- 0.8
-    this_line_weight  <- 2
-
-    # limit if needed the number of shown tracks on the map
-    # remove the legend in case of more than 10 tracks
-    track_limit <- length(individual_names)
-    fixed_track_limit <- 10
-    if(input$checkbox_full_map) {
+    # limit number of shown tracks on map if needed
+    track_limit <- length_remaining_individuals
+    if (input$checkbox_full_map) {
       track_limit <- fixed_track_limit
     }
 
-    # create map with lines for each individual
+    # create map with scale, tiles and controls
     map <- leaflet() %>% 
-      addTiles()
+      addTiles() %>% 
+      addScaleBar(position = "topleft") %>% 
+      addProviderTiles("Esri.WorldTopoMap", group = "TopoMap") %>% 
+      addProviderTiles("Esri.WorldImagery", group = "Aerial") %>% 
+      addLayersControl(position = "topleft", baseGroups = c("StreetMap", "Aerial"),
+                       overlayGroups = c("Lines", "Points"),
+                       options = layersControlOptions(collapsed = FALSE)) %>% 
+      leafem::addMouseCoordinates()
     
-    # check if only one element is in the selected set
-    if(length(individual_names) > 1) {
+    # populate map
+    if (length(remaining_individuals) > 1) {
 
-      for (i in seq(along = head(individual_names, n = track_limit))) {
+      for (i in seq(along = head(remaining_individuals, n = track_limit))) {
+        
+        if (nrow(data_processed_reduced_filtered) == 0) {
+          
+          # filter data for individual
+          data_processed_filtered_individual <- data_processed_filtered[data_processed_filtered$individuals == remaining_individuals[i], ]
+          
+          # add lines and points
+          map <- map %>% 
+            addPolylines(data = data_processed_filtered_individual,
+                         lng = ~long,
+                         lat = ~lat,
+                         color = individual_colors[i],
+                         opacity = line_opacity,
+                         weight = line_weight,
+                         group = "Lines") %>% 
+            addCircles(data = data_processed_filtered_individual,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[i],
+                       opacity = circle_opacity,
+                       fillOpacity = circle_fill_opacity,
+                       label = ~timestamps,
+                       group = "Points")
+          
+        } else {
+          
+          # filter data for individual
+          data_processed_filtered_individual <- data_processed_reduced_filtered[data_processed_reduced_filtered$individuals == remaining_individuals[i], ]
+          
+          # add lines and points
+          map <- map %>% 
+            addPolylines(data = data_processed_filtered_individual,
+                         lng = ~long,
+                         lat = ~lat,
+                         color = individual_colors[i],
+                         opacity = line_opacity,
+                         weight = line_weight,
+                         group = "Lines") %>% 
+            addCircles(data = data_processed_filtered_individual,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[i],
+                       opacity = circle_opacity,
+                       fillOpacity = circle_fill_opacity,
+                       label = ~timestamps,
+                       group = "Points")
+          
+        }
+        
+      }
+        
+      # add marker for last location of stationary individuals if there are any
+      if (nrow(stationary_individuals) > 0) {
+        
+        for (remaining_individual in remaining_individuals) {
+          
+          stationary_individual <- unique(stationary_individuals[stationary_individuals$individuals == remaining_individual, ]$individuals)
+          
+          if (length(stationary_individual) > 0) {
+            
+            data_processed_filtered_stationary <- tail(data_processed_filtered[data_processed_filtered$individuals == stationary_individual, ], 1)
+            
+            stationary_long <- data_processed_filtered_stationary$long
+            stationary_lat <- data_processed_filtered_stationary$lat
+            stationary_time <- data_processed_filtered_stationary$timestamps
+            
+            stationary_icon <- awesomeIcons(icon = "map-pin",
+                                            library = "fa",
+                                            markerColor = "black")
+            
+            map <- map %>% 
+              addAwesomeMarkers(lng = stationary_long,
+                                lat = stationary_lat,
+                                icon = stationary_icon,
+                                label = paste0("Stationary at: ", stationary_time))
+            
+          }
+          
+        }
+        
+      }
+      
+      # don't show legend if map is showing more than 10 tracks
+      if (track_limit <= fixed_track_limit) {
 
         map <- map %>% 
-          addPolylines(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = this_line_opacity, group = individual_names[i], weight = this_line_weight) %>% 
-          addCircles(data = processed_data_filtered[processed_data_filtered$tag.local.identifier == individual_names[i], ], lat = ~location.lat, lng = ~location.long, color = individual_colors[i], opacity = 0.5, fillOpacity = 0.3, group = individual_names[i])
-      
+          addLegend(position = "topright",
+                    colors = individual_colors,
+                    opacity = legend_opacity,
+                    labels = remaining_individuals)
+        
       }
       
     } else {
       
-      last_lon <- tail(processed_data_filtered, 1)$location.long
-      last_lat <- tail(processed_data_filtered, 1)$location.lat
-      last_time <- tail(processed_data_filtered, 1)$timestamps
-
-      map <- map %>% 
-        addPolylines(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = this_line_opacity, group = individual_names_original[selected_id], weight = this_line_weight) %>% 
-        addCircleMarkers(data = processed_data_filtered, lat = ~location.lat, lng = ~location.long, color = individual_colors[selected_id], opacity = 0.5, fillOpacity = 0.3, label = ~timestamps, clusterOptions = markerClusterOptions()) %>% 
-        addMarkers(lng = last_lon,
-                   lat = last_lat,
-                   label = paste0("Last location at: ", last_time))
-
-    }
-    
-    if(input$dropdown_individual == "all") {
-      selected_id <- 1:length(individual_colors)
-    }
-
-    # don't show the legend if the map is showing more than 10 tracks
-    if(track_limit <= fixed_track_limit) {
+      # get index of selected individual
+      selected_index <- which(individuals == remaining_individuals)
       
-      map  <- map %>% 
-        addLegend(position = "topright", colors = individual_colors[selected_id], opacity = 0.6, labels = individual_names_original[selected_id])
-    
+      # get first and last long, lat and time
+      first_long <- head(data_processed_filtered, 1)$long
+      first_lat <- head(data_processed_filtered, 1)$lat
+      first_time <- head(data_processed_filtered, 1)$timestamps
+      
+      last_long <- tail(data_processed_filtered, 1)$long
+      last_lat <- tail(data_processed_filtered, 1)$lat
+      last_time <- tail(data_processed_filtered, 1)$timestamps
+      
+      # create start and end icons
+      start_icon <- awesomeIcons(icon = "map-pin",
+                                 library = "fa",
+                                 markerColor = "white")
+      end_icon <- awesomeIcons(icon = "map-pin",
+                               library = "fa",
+                               markerColor = "red")
+      
+      if (nrow(data_processed_filtered) <= limit_upper_observations) {
+        
+        # add lines and points
+        map <- map %>% 
+          addPolylines(data = data_processed_filtered,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[selected_index],
+                       opacity = line_opacity,
+                       weight = line_weight,
+                       group = "Lines") %>% 
+          addCircleMarkers(data = data_processed_filtered,
+                           lng = ~long,
+                           lat = ~lat,
+                           color = individual_colors[selected_index],
+                           opacity = circle_opacity,
+                           fillOpacity = circle_fill_opacity,
+                           label = ~timestamps,
+                           clusterOptions = markerClusterOptions(),
+                           group = "Points")
+        
+      } else {
+        
+        # add lines and points
+        map <- map %>% 
+          addPolylines(data = data_processed_reduced_filtered,
+                       lng = ~long,
+                       lat = ~lat,
+                       color = individual_colors[selected_index],
+                       opacity = line_opacity,
+                       weight = line_weight,
+                       group = "Lines") %>% 
+          addCircleMarkers(data = data_processed_reduced_filtered,
+                           lng = ~long,
+                           lat = ~lat,
+                           color = individual_colors[selected_index],
+                           opacity = circle_opacity,
+                           fillOpacity = circle_fill_opacity,
+                           label = ~timestamps,
+                           clusterOptions = markerClusterOptions(),
+                           group = "Points")
+        
+      }
+      
+      # add markers
+      map <- map %>% 
+        addAwesomeMarkers(lng = first_long,
+                          lat = first_lat,
+                          icon = start_icon,
+                          label = paste0("First location at: ", first_time)) %>% 
+        addAwesomeMarkers(lng = last_long,
+                          lat = last_lat,
+                          icon = end_icon,
+                          label = paste0("Last location at: ", last_time))
+      
+      # add legend
+      map <- map %>% 
+        addLegend(position = "topright",
+                  colors = individual_colors[selected_index],
+                  opacity = legend_opacity,
+                  labels = remaining_individuals)
+
     }
 
     map
     
   })
  
-  output$map <- renderLeaflet({ map() })
+  output$map <- renderLeaflet({ rctv_map() })
   
   
   
@@ -376,70 +885,115 @@ shinyModule <- function(input, output, session, data) {
   rctv_movement_summary <- reactive({
     
     # load reactive data
-    data_aggregated <- rctv_data_aggregated()
-    
-    # get individuals
-    individuals <- unique(data_aggregated$tag.local.identifier)
-
-    # calculate average measures per day and variance
-    measures_aggregated <- data_aggregated %>% 
-				    group_by(tag.local.identifier) %>% 
-				    summarise(avg_measures = round(mean(measures_per_date), 1),
-				              var_measures = round(var(measures_per_date), 1))
+    data_processed_filtered <- rctv_data_processed_filtered()$data_processed_filtered
+    data_aggregated <- rctv_data_aggregated()$data_aggregated
+    individuals <- rctv_data_aggregated()$individuals
+    stationary_individuals <- rctv_stationary_individuals()
     
     # create empty dataframe to store movement summary
-    movement_summary_columns <- c("individual", "start date", "end date", "#days w measures", "#days w/o measures", "today below avg.", "total distance (m)", "avg. distance (m)")
+    movement_summary_columns <- c("individual",
+                                  "first timestamp",
+                                  "first location",
+                                  "last timestamp",
+                                  "last location",
+                                  "#days w measures",
+                                  "#days w/o measures",
+                                  "total distance (km)",
+                                  "median distance (km)")
     movement_summary <- data.frame(matrix(ncol = length(movement_summary_columns), nrow = 0))
     colnames(movement_summary) <- movement_summary_columns
     
     # compute movement summary for last n days per individual
-    for(individual in individuals) {
+    for (individual in individuals) {
       
       # filter data based on individual
-      individual_data_aggregated <- data_aggregated[data_aggregated$tag.local.identifier == individual, ]
+      individual_data_processed_filtered <- data_processed_filtered[data_processed_filtered$individuals == individual, ]
+      individual_data_aggregated <- data_aggregated[data_aggregated$individuals == individual, ]
       
-      # calculate missing days (account for all set to 99999)
-      missing_days <- as.numeric(input$dropdown_date_range) - dim(individual_data_aggregated)[1]
-      missing_days <- ifelse(missing_days < 0, 0, missing_days)
+      # get first and last timestamp
+      first_timestamp <- min(individual_data_processed_filtered$timestamps)
+      last_timestamp <- max(individual_data_processed_filtered$timestamps)
       
-      # calculate today below average
-      avg_distance <- mean(individual_data_aggregated$distance_meters)
-      sd_distance <- sd(individual_data_aggregated$distance_meters)
-      min_date <- min(individual_data_aggregated$date)
-      max_date <- max(individual_data_aggregated$date)
-      meters_today <- individual_data_aggregated[individual_data_aggregated$date == max_date, "distance_meters"] 
-      below_today <- ifelse(meters_today < avg_distance - (1.5 * sd_distance), "yes", "no")
+      # get first and last location
+      first_long <- head(individual_data_processed_filtered, 1)$long
+      last_long <- tail(individual_data_processed_filtered, 1)$long
+      first_lat <- head(individual_data_processed_filtered, 1)$lat
+      last_lat <- tail(individual_data_processed_filtered, 1)$lat
+      
+      # get number of days with and without measures
+      days_with_measures <- dim(individual_data_aggregated)[1]
+      days_without_measures <- as.numeric(input$dropdown_date_range) - days_with_measures
+      days_without_measures <- ifelse(days_without_measures < 0, 0, days_without_measures)
+      
+      # get total and median distance
+      total_distance <- sum(individual_data_aggregated$daily_distance_meters)
+      median_distance <- median(individual_data_aggregated$daily_distance_meters)
 
       # store values
       individual_movement_summary <- c(individual,
-                                       as.character(min_date),
-                                       as.character(max_date),
-                                       dim(individual_data_aggregated)[1],
-                                       missing_days,
-                                       below_today,
-                                       round(sum(individual_data_aggregated$distance_meters), 0),
-                                       round(avg_distance, 0))
+                                       as.character(first_timestamp),
+                                       paste0("(", first_long, ", ", first_lat, ")"),
+                                       as.character(last_timestamp),
+                                       paste0("(", last_long, ", ", last_lat, ")"),
+                                       days_with_measures,
+                                       days_without_measures,
+                                       round(total_distance / 1000, 2),
+                                       round(median_distance / 1000, 2))
       
       # append individual movement summary to existing dataframe
       movement_summary[nrow(movement_summary) + 1, ] <- individual_movement_summary
       
     }
+    
+    # calculate average number of measures per day and variance
+    measures_aggregated <- data_aggregated %>% 
+      group_by(individuals) %>% 
+      summarise(avg_measures = round(mean(measures_per_date), 1),
+                var_measures = round(var(measures_per_date), 1)) %>% 
+      rename(individual = individuals)
 
-    # join avg and var movement
+    # join avg and var measures
     movement_summary <- movement_summary %>% 
-      left_join(measures_aggregated, by = join_by(individual == tag.local.identifier))
-    colnames(movement_summary) <- c(head(colnames(movement_summary), -2), "avg. measures", "var. measures")
+      left_join(measures_aggregated, by = "individual")
+    colnames(movement_summary) <- c(head(colnames(movement_summary), -2),
+                                    "avg. measures",
+                                    "var. measures")
 
     # convert relevant columns to numeric
-    movement_summary[, 4:5] <- apply(movement_summary[, 4:5], 2, as.numeric)
-    movement_summary[, 7:10] <- apply(movement_summary[, 7:10], 2, as.numeric)
-
+    movement_summary[ , 6:11] <- apply(movement_summary[ , 6:11], 2, as.numeric)
+    
+    # join stationary individuals if there are any
+    if (nrow(stationary_individuals) > 0) {
+      
+      movement_summary <- movement_summary %>% 
+        left_join(stationary_individuals, by = join_by("individual" == "individuals")) %>% 
+        mutate(stationary = ifelse(is.na(stationary), "no", stationary))
+      
+    } else {
+      
+      movement_summary <- cbind(movement_summary, stationary = "no")
+      
+    }
+    
     movement_summary
     
   })
   
   output$movement_summary <- renderDataTable({ datatable(rctv_movement_summary()) })
   
-  return(rctv_data)
+  
+  
+  ##### download table
+  output$download_table <- downloadHandler(
+    
+    filename = function(){paste0("movement_summary_last_", as.character(input$dropdown_date_range), "_days.csv")},
+    content = function(fname){write.csv(rctv_movement_summary(), file = fname, row.names = FALSE)}
+    
+    )
+  
+  
+  
+  # return unmodified input data
+  return(reactive({ current() }))
 
  }
